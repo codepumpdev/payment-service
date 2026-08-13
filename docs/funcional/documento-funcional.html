@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Payment Service — Documento Funcional</title>
+<style>
+  :root {
+    --primary: #6d28d9;
+    --primary-dark: #5b21b6;
+    --bg: #f7f8fb;
+    --card: #ffffff;
+    --text: #1f2937;
+    --muted: #5b6472;
+    --border: #dfe7ea;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  header.hero {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: #fff;
+    padding: 48px 24px 40px;
+    text-align: center;
+  }
+  header.hero h1 { margin: 0 0 8px; font-size: 2.1em; }
+  header.hero p { margin: 0; opacity: 0.9; font-size: 1.05em; }
+  .layout {
+    display: flex;
+    max-width: 1100px;
+    margin: 0 auto;
+    gap: 32px;
+    padding: 32px 24px 80px;
+    align-items: flex-start;
+  }
+  nav.toc {
+    flex: 0 0 260px;
+    position: sticky;
+    top: 24px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+  }
+  nav.toc h2 { font-size: 0.95em; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-top: 0; }
+  nav.toc ol { padding-left: 18px; margin: 0; }
+  nav.toc li { margin-bottom: 6px; }
+  nav.toc a { color: var(--primary-dark); text-decoration: none; font-size: 0.94em; }
+  nav.toc a:hover { text-decoration: underline; }
+  nav.toc ol ol { margin-top: 4px; padding-left: 16px; }
+  nav.toc ol ol a { color: var(--muted); font-size: 0.9em; }
+  main { flex: 1; min-width: 0; }
+  section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 24px;
+  }
+  section h2 {
+    color: var(--primary-dark);
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 10px;
+    margin-top: 0;
+  }
+  section h3 { color: var(--primary); margin-top: 28px; }
+  .actor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin: 16px 0;
+  }
+  .actor-card {
+    background: #f3ecfd;
+    border: 1px solid #ddd0f7;
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .actor-card strong { display: block; color: var(--primary-dark); margin-bottom: 4px; }
+  .actor-card span { color: var(--muted); font-size: 0.92em; }
+  .steps {
+    list-style: none;
+    padding: 0;
+    margin: 16px 0;
+  }
+  .steps li {
+    position: relative;
+    padding: 10px 0 10px 34px;
+    border-left: 2px solid var(--border);
+    margin-left: 12px;
+  }
+  .steps li::before {
+    content: "";
+    position: absolute;
+    left: -7px;
+    top: 16px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--primary);
+  }
+  .steps li:last-child { border-left: 2px solid transparent; }
+  .box {
+    background: #fafafa;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--primary);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 14px 0;
+  }
+  .box.warn { border-left-color: #b45309; background: #fffbeb; }
+  .box.info { border-left-color: #2563eb; background: #eff6ff; }
+  .box.open { border-left-color: #9333ea; background: #faf5ff; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 0.95em; }
+  th { color: var(--muted); text-transform: uppercase; font-size: 0.78em; letter-spacing: 0.03em; }
+  code { background: #f0e9fc; border-radius: 4px; padding: 1px 6px; font-size: 0.92em; }
+  pre {
+    background: #000000;
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-size: 0.88em;
+  }
+  pre code { background: none; color: #ffffff; padding: 0; }
+  .pill {
+    display: inline-block;
+    background: #ede4fb;
+    color: var(--primary-dark);
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 0.82em;
+    margin-right: 6px;
+    margin-bottom: 4px;
+  }
+  .pill.mvp-out { background: #fef3e6; color: #92400e; }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85em;
+    padding: 24px;
+  }
+  @media (max-width: 860px) {
+    .layout { flex-direction: column; }
+    nav.toc { position: static; width: 100%; flex: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <h1>Payment Service</h1>
+  <p>Documento Funcional — visão geral do processamento de pagamentos, explicada em linguagem simples</p>
+</header>
+
+<div class="layout">
+
+<nav class="toc">
+  <h2>Índice</h2>
+  <ol>
+    <li><a href="#introducao">Introdução</a></li>
+    <li><a href="#visao-geral">Visão Geral</a>
+      <ol>
+        <li><a href="#atores">Quem participa</a></li>
+      </ol>
+    </li>
+    <li><a href="#conceito">1. O que é um Payment</a></li>
+    <li><a href="#tipo">2. Receber ou Pagar</a></li>
+    <li><a href="#criacao">3. Criando um Payment</a></li>
+    <li><a href="#consultas">4. Consultando Payments</a></li>
+    <li><a href="#status">5. Acompanhando o Status</a></li>
+    <li><a href="#webhook">6. Confirmação do Provedor (Webhook)</a></li>
+    <li><a href="#tentativas">7. Tentativas Múltiplas</a></li>
+    <li><a href="#recebedor">8. Dados do Recebedor (Pagamentos)</a></li>
+    <li><a href="#estorno">9. Estorno</a></li>
+    <li><a href="#historico">10. Histórico e Auditoria</a></li>
+    <li><a href="#seguranca">11. Segurança: Quem Pode Fazer o Quê</a></li>
+    <li><a href="#mvp">12. Escopo da Primeira Versão</a></li>
+    <li><a href="#hotspots">13. Perguntas Ainda Abertas</a></li>
+    <li><a href="#resumo">14. Resumo: O que Cada Sistema Consumidor Precisa Saber</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="introducao">
+  <h2>Introdução</h2>
+  <p>O <strong>Payment Service</strong> é o serviço que efetivamente movimenta dinheiro — ele nunca decide "quanto se deve" (isso é responsabilidade do <strong>Billing Service</strong>), só executa e confirma a movimentação real, através de um provedor de pagamento (banco, Pix, etc.).</p>
+  <p>Este documento explica, em linguagem simples, como cada processo funciona — não é necessário conhecimento técnico para entender os fluxos aqui descritos.</p>
+  <div class="box info">
+    Para o detalhamento técnico (eventos, estados, decisões de arquitetura), consulte os documentos em <code>docs/dominio</code> e <code>docs/produto</code>. Este documento é a versão narrativa e resumida desses fluxos.
+  </div>
+  <div class="box open">
+    Este é um documento de <strong>ponto de partida</strong>, escrito a partir da especificação fornecida pelo usuário (2026-08-13). Três perguntas ficaram em aberto (reunidas na seção 13) — todas relacionadas ao fato de que o provedor de pagamento real ainda não foi escolhido.
+  </div>
+</section>
+
+<section id="visao-geral">
+  <h2>Visão Geral</h2>
+  <h3 id="atores">Quem participa</h3>
+  <div class="actor-grid">
+    <div class="actor-card"><strong>Sistema Consumidor</strong><span>Aplicação corporativa que cria/consulta pagamentos via API, autenticada por um token de sistema. Tipicamente o Billing Service.</span></div>
+    <div class="actor-card"><strong>Payment Service</strong><span>Cria e controla o status de pagamentos — executa a movimentação financeira real.</span></div>
+    <div class="actor-card"><strong>Billing Service</strong><span>Representa a obrigação financeira (quanto se deve); informa o Payment Service qual valor precisa ser movimentado, e é informado de volta quando o pagamento é concluído.</span></div>
+    <div class="actor-card"><strong>Payment Provider</strong><span>Serviço externo (nome real ainda não definido) que processa a operação de fato — Pix, e futuramente outros meios — e confirma o resultado.</span></div>
+    <div class="actor-card"><strong>Person Service</strong><span>Fonte oficial de dados de destino (CPF/CNPJ, chave Pix, conta bancária) — consultado quando a empresa está pagando alguém.</span></div>
+    <div class="actor-card"><strong>Notification Service</strong><span>Decide como avisar o usuário final sobre o resultado — o Payment Service nunca envia notificação diretamente.</span></div>
+  </div>
+</section>
+
+<section id="conceito">
+  <h2>1. O que é um Payment</h2>
+  <p>Um <strong>Payment</strong> representa uma <strong>tentativa concreta de movimentar dinheiro</strong> — "envie R$ 150,00 via Pix, referente à cobrança X". Ele sempre está relacionado a uma cobrança já existente no Billing Service; o Payment Service nunca cria uma obrigação financeira por conta própria.</p>
+  <div class="box">
+    Nunca confunda Payment com a cobrança em si. A cobrança (Billing) diz "quanto se deve"; o Payment diz "essa é uma tentativa real de mover esse dinheiro".
+  </div>
+</section>
+
+<section id="tipo">
+  <h2>2. Receber ou Pagar</h2>
+  <p>Todo Payment tem um sentido, que nunca muda depois de criado:</p>
+  <div class="actor-grid">
+    <div class="actor-card"><strong>RECEIVE</strong><span>A empresa está recebendo dinheiro — ex.: um cliente pagando um pedido.</span></div>
+    <div class="actor-card"><strong>PAY</strong><span>A empresa está pagando dinheiro — ex.: um pagamento a um fornecedor ou prestador.</span></div>
+  </div>
+  <p>Isso corresponde diretamente aos dois sentidos já modelados pelo Billing Service: uma cobrança a receber (<code>RECEIVABLE</code>) gera um Payment <code>RECEIVE</code>; uma cobrança a pagar (<code>PAYABLE</code>) gera um Payment <code>PAY</code>.</p>
+</section>
+
+<section id="criacao">
+  <h2>3. Criando um Payment</h2>
+  <p>Um Sistema Consumidor (tipicamente o Billing Service) pede ao Payment Service para criar um pagamento, informando o sentido, a cobrança relacionada, o valor e o meio de pagamento.</p>
+  <ul class="steps">
+    <li><strong>Confere se já foi criado antes</strong> — toda criação usa uma "chave de repetição"; se a mesma chave já foi usada, o pagamento já existente é devolvido, sem duplicar.</li>
+    <li><strong>Confirma a cobrança</strong> — verifica junto ao Billing Service que a cobrança existe e que o valor não ultrapassa o que ainda falta pagar.</li>
+    <li><strong>Se for um pagamento (PAY)</strong> — busca os dados de destino (chave Pix, conta bancária) junto ao Person Service, sem nunca guardar esse dado.</li>
+    <li><strong>Envia a operação ao provedor</strong> — na mesma chamada, tenta iniciar a movimentação de fato.</li>
+    <li><strong>Devolve os dados necessários</strong> — por exemplo, um QR Code Pix, para o cliente concluir o pagamento.</li>
+  </ul>
+  <div class="box">
+    O código único (<code>paymentId</code>) gerado é o que o Sistema Consumidor deve guardar para se referir a esse pagamento depois — nunca o identificador que o provedor atribui.
+  </div>
+</section>
+
+<section id="consultas">
+  <h2>4. Consultando Payments</h2>
+  <p>É possível consultar um pagamento pelo seu código, ou listar todos os pagamentos relacionados a uma cobrança — útil quando existiram várias tentativas, um pagamento parcial, ou um estorno.</p>
+</section>
+
+<section id="status">
+  <h2>5. Acompanhando o Status</h2>
+  <p>Todo Payment tem um status: <strong>pendente</strong>, <strong>processando</strong>, <strong>aprovado</strong>, <strong>recusado</strong>, <strong>cancelado</strong>, <strong>estornado</strong> ou <strong>parcialmente estornado</strong>. As mudanças seguem regras fixas — por exemplo, um pagamento já aprovado nunca volta a ser pendente, e um pagamento recusado nunca vira aprovado.</p>
+  <div class="box warn">
+    Um Payment só muda de status por dois motivos: ele acabou de ser criado (e o provedor aceitou processá-lo), ou o provedor confirmou o resultado via webhook. Nunca por uma edição manual.
+  </div>
+</section>
+
+<section id="webhook">
+  <h2>6. Confirmação do Provedor (Webhook)</h2>
+  <p>Depois que o Payment Service envia a operação ao provedor, a confirmação (aprovado, recusado) normalmente chega depois, de forma assíncrona — o provedor "avisa" o Payment Service através de um webhook.</p>
+  <ul class="steps">
+    <li><strong>Verifica a autenticidade</strong> — nunca confia só no identificador recebido; valida a assinatura/segurança do provedor antes de processar qualquer coisa.</li>
+    <li><strong>Evita processar duas vezes</strong> — o mesmo provedor pode reenviar o mesmo aviso mais de uma vez; o Payment Service reconhece isso e não aplica a mudança duas vezes.</li>
+    <li><strong>Aplica o resultado</strong> — muda o status do pagamento e avisa o Billing Service.</li>
+  </ul>
+</section>
+
+<section id="tentativas">
+  <h2>7. Tentativas Múltiplas</h2>
+  <p>Se um pagamento é recusado, o Sistema Consumidor pode tentar de novo — mas isso sempre gera um <strong>novo</strong> Payment, nunca reaproveita o antigo. O pagamento recusado permanece registrado, do jeito que aconteceu.</p>
+  <div class="box">
+    Exemplo: uma cobrança de R$ 150,00 pode ter uma primeira tentativa recusada, uma segunda também recusada, e uma terceira aprovada — três Payments distintos, todos preservados no histórico.
+  </div>
+</section>
+
+<section id="recebedor">
+  <h2>8. Dados do Recebedor (Pagamentos)</h2>
+  <p>Quando a empresa está pagando alguém (<code>PAY</code>), o Payment Service precisa saber para onde mandar o dinheiro — chave Pix, conta bancária. Esse dado nunca é cadastrado diretamente aqui: é sempre buscado no Person Service, na hora da operação, e nunca guardado além do necessário para aquela chamada.</p>
+  <div class="box open">
+    Se a pessoa não tiver nenhuma conta de recebimento cadastrada no Person Service, o pagamento não pode ser criado.
+  </div>
+</section>
+
+<section id="estorno">
+  <h2>9. Estorno</h2>
+  <p>O modelo já reconhece que um pagamento pode ser estornado (total ou parcialmente) — mas, nesta primeira versão, o Payment Service não oferece um jeito de <strong>iniciar</strong> um estorno. Se o próprio provedor/banco reportar um estorno feito por outro caminho, o Payment Service reflete isso no status; só não existe, ainda, um botão/endpoint para pedir o estorno através deste serviço.</p>
+</section>
+
+<section id="historico">
+  <h2>10. Histórico e Auditoria</h2>
+  <p>Toda mudança de status de um pagamento fica registrada, com data e motivo — esse histórico nunca é apagado ou alterado depois de criado. Além disso, toda operação relevante (criação, aprovação, recusa, cancelamento, estorno) fica registrada para fins de auditoria: quem fez, quando, a partir de qual sistema — nunca com dado financeiro sensível junto.</p>
+</section>
+
+<section id="seguranca">
+  <h2>11. Segurança: Quem Pode Fazer o Quê</h2>
+  <p>Todo acesso passa pelo serviço central de autenticação da empresa — o Payment Service não tem login próprio (exceto o webhook do provedor, que usa um mecanismo de segurança próprio dele). Cada sistema recebe permissões específicas:</p>
+  <div class="actor-grid">
+    <div class="actor-card"><strong>Ler</strong><span>Consultar pagamentos</span></div>
+    <div class="actor-card"><strong>Criar</strong><span>Criar novos pagamentos</span></div>
+    <div class="actor-card"><strong>Cancelar</strong><span>Cancelar um pagamento ainda não enviado ao provedor</span></div>
+    <div class="actor-card"><strong>Estornar</strong><span>Reservada para quando o estorno for implementado</span></div>
+  </div>
+  <p>Senhas, chaves privadas, CVV, dado bancário completo e tokens de acesso nunca aparecem em nenhum registro técnico interno (log) nem são armazenados além do estritamente necessário.</p>
+</section>
+
+<section id="mvp">
+  <h2>12. Escopo da Primeira Versão</h2>
+  <p>
+    <span class="pill">Criação de pagamento (RECEIVE e PAY)</span>
+    <span class="pill">Consulta por código e por cobrança</span>
+    <span class="pill">Idempotência de criação</span>
+    <span class="pill">Meio de pagamento PIX</span>
+    <span class="pill">Controle de status</span>
+    <span class="pill">Histórico</span>
+    <span class="pill">Webhook do provedor</span>
+    <span class="pill">Idempotência de webhook</span>
+    <span class="pill">Integração com um provedor</span>
+    <span class="pill">Integração com Billing Service e Person Service</span>
+    <span class="pill">Auditoria</span>
+  </p>
+  <p><strong>Fora desta versão:</strong></p>
+  <p>
+    <span class="pill mvp-out">Iniciar estorno pelo Payment Service</span>
+    <span class="pill mvp-out">Múltiplos provedores simultâneos</span>
+    <span class="pill mvp-out">Múltiplas moedas</span>
+    <span class="pill mvp-out">Parcelamento complexo</span>
+    <span class="pill mvp-out">Split de pagamento</span>
+    <span class="pill mvp-out">Recorrência / assinaturas</span>
+    <span class="pill mvp-out">Boleto</span>
+  </p>
+</section>
+
+<section id="hotspots">
+  <h2>13. Perguntas Ainda Abertas</h2>
+  <div class="box open">
+    <strong>Qual provedor de pagamento será efetivamente integrado?</strong> A especificação usa nomes ilustrativos ("Provider A", "Provider B"); nenhum provedor real foi escolhido. Esta documentação assume um nome interno provisório (<code>PROVIDER_A</code>) só para viabilizar o restante do desenho.
+  </div>
+  <div class="box open">
+    <strong>Como exatamente validar a autenticidade de um webhook?</strong> Depende diretamente da resposta acima — cada provedor tem seu próprio mecanismo de assinatura/segurança.
+  </div>
+  <div class="box open">
+    <strong>O estorno reportado pelo próprio provedor (fora do controle deste serviço) está mesmo dentro do escopo desta versão?</strong> A especificação tem um trecho que sugere estorno "para depois" e outro trecho que já inclui os status de estorno "desde o início" — esta documentação assumiu que o Payment Service reage a um estorno relatado pelo provedor nesta versão, mas nunca inicia um estorno por conta própria (isso fica para depois).
+  </div>
+</section>
+
+<section id="resumo">
+  <h2>14. Resumo: O que Cada Sistema Consumidor Precisa Saber</h2>
+  <ol>
+    <li>Autentique-se pelo serviço central de autenticação da empresa — nunca existe login próprio aqui (exceto para o provedor, no webhook).</li>
+    <li>Sempre envie uma chave de repetição ao criar um pagamento, para evitar duplicidade em caso de reenvio.</li>
+    <li>Guarde sempre o <code>paymentId</code> devolvido na criação — nunca o identificador do provedor.</li>
+    <li>Um pagamento sempre está relacionado a uma cobrança já existente no Billing Service.</li>
+    <li>Um pagamento recusado nunca é reaproveitado — uma nova tentativa é sempre um novo pagamento.</li>
+    <li>Um pagamento aprovado, recusado ou cancelado nunca muda de status novamente (exceto aprovado → estornado, de forma reativa).</li>
+  </ol>
+</section>
+
+</main>
+</div>
+
+<footer>
+  Payment Service — Documento Funcional · Gerado a partir da especificação fornecida pelo usuário (2026-08-13)
+</footer>
+
+</body>
+</html>

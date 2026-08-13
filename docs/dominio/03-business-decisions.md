@@ -72,7 +72,7 @@
 
 **Decisão:** todo valor financeiro (`amount`) é armazenado com precisão decimal (`NUMERIC` no PostgreSQL) — nunca `float`, em nenhuma camada (banco, aplicação, serialização). `currency` é um campo explícito, restrito a `BRL` nesta versão — o modelo já suporta o campo, mas nenhuma lógica de conversão/multi-moeda existe.
 
-**Impacto:** `19-data-model.md` (`payments.amount NUMERIC(14,2)`); `17-api-contracts.md`; `arquitetura/decisoes/ADR-013-...md`.
+**Impacto:** `19-data-model.md` (`payments.amount NUMERIC(14,2)`); `17-api-contracts.md`; `arquitetura/decisoes/ADR-014-...md`.
 
 **Consequências:**
 - Positivas: elimina uma classe inteira de bug de arredondamento financeiro desde o primeiro dia; mesma decisão já validada por `billing-service` (BD-04 daquele serviço).
@@ -194,7 +194,7 @@
 
 **Decisão:** nenhuma regra de negócio deste serviço depende diretamente da API específica de um provedor de pagamento. Toda comunicação com o provedor passa por uma interface própria (`PaymentProvider`, camada `internal/infrastructure` — `padrao-desenvolvimento.md`, seção 2, Clean Architecture), permitindo múltiplas implementações concretas (`ProviderA`, `ProviderB`, ...) sem alterar o domínio. O provedor concreto ativo é escolhido por configuração — nenhuma lógica de negócio decide qual provedor usar nesta versão (só um provedor implementado, ver Hotspot H01).
 
-**Impacto:** `arquitetura/13-architecture.md` (camada de abstração); `arquitetura/decisoes/ADR-011-...md`.
+**Impacto:** `arquitetura/13-architecture.md` (camada de abstração); `arquitetura/decisoes/ADR-015-...md`.
 
 **Consequências:**
 - Positivas: trocar de provedor, ou adicionar um segundo, não exige alterar nenhuma regra de domínio — só uma nova implementação da interface.
@@ -270,7 +270,9 @@
 
 **Origem:** Documento funcional, seção 34; `padrao-desenvolvimento.md`, seção 7.1.
 
-**Decisão:** toda operação financeira relevante (`PAYMENT_CREATED`, `PAYMENT_APPROVED`, `PAYMENT_REJECTED`, `PAYMENT_CANCELLED`, `PAYMENT_REFUNDED`) gera um registro de auditoria com `paymentId`, `billingId`, `operation`, `application`, `actor`, `createdAt` — nunca dado financeiro sensível (chave Pix, conta bancária, CVV). Histórico de auditoria nunca é alterado depois de criado.
+**Decisão:** toda operação financeira relevante (`PAYMENT_CREATED`, `PAYMENT_APPROVED`, `PAYMENT_REJECTED`, `PAYMENT_CANCELLED`, `PAYMENT_REFUNDED`, `PAYMENT_PARTIALLY_REFUNDED`) gera um registro de auditoria com `paymentId`, `billingId`, `operation`, `application`, `actor`, `createdAt` — nunca dado financeiro sensível (chave Pix, conta bancária, CVV). Histórico de auditoria nunca é alterado depois de criado.
+
+*(Nota de 2026-08-13, verificação: `PAYMENT_PARTIALLY_REFUNDED` foi adicionado a este catálogo — a máquina de estados de BD-07/BD-08 já permite `APPROVED → PARTIALLY_REFUNDED` de forma reativa, e sem essa operação no catálogo, RF-09 não teria como registrar auditoria para essa transição.)*
 
 **Impacto:** `19-data-model.md` (`audit_logs`); `contratos/18-event-contracts.md`.
 

@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Roadmap do Projeto — payment-service</title>
+<style>
+  :root {
+    --primary: #6d28d9;
+    --primary-dark: #5b21b6;
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --border: #e2e5ea;
+    --text: #1f2937;
+    --muted: #5b6472;
+    --done: #16a34a;
+    --partial: #eab308;
+    --blocked: #9ca3af;
+    --ready: #2563eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: #fff;
+    padding: 28px 24px;
+    text-align: center;
+  }
+  header h1 { margin: 0 0 4px; font-size: 1.5em; }
+  header p { margin: 0; opacity: 0.85; font-size: 0.92em; }
+  .legend {
+    display: flex;
+    justify-content: center;
+    gap: 22px;
+    padding: 14px 24px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.88em;
+    flex-wrap: wrap;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+  .dot.done { background: var(--done); }
+  .dot.partial { background: var(--partial); cursor: pointer; }
+  .dot.blocked { background: var(--blocked); cursor: pointer; }
+  .dot.ready { background: var(--ready); cursor: pointer; }
+  .dot.partial:hover, .dot.blocked:hover, .dot.ready:hover { outline: 2px solid var(--muted); outline-offset: 2px; }
+  .stage li.clickable { cursor: pointer; }
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--card);
+    border-radius: 12px;
+    max-width: 440px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 22px 24px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+  }
+  .modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+  .modal-header h3 { margin: 0; font-size: 1.05em; color: var(--primary-dark); }
+  .modal-close {
+    border: none;
+    background: none;
+    font-size: 1.3em;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--muted);
+    flex: none;
+  }
+  .modal-status { font-size: 0.78em; color: var(--muted); margin-bottom: 14px; }
+  .modal-body ul { margin: 0 0 16px; padding-left: 20px; }
+  .modal-body li { font-size: 0.9em; margin-bottom: 6px; }
+  .modal-table { width: 100%; border-collapse: collapse; margin: 0 0 16px; }
+  .modal-table th, .modal-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: 0.85em; vertical-align: top; }
+  .modal-table th { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+  .modal-copy {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 7px 14px;
+    font-size: 0.85em;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .modal-copy:hover { background: #eceef1; }
+  .modal-copy.copied { background: #ede9fe; color: #4c1d95; border-color: #c4b5fd; }
+  .next-step {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    background: #f5f3ff;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    font-size: 0.92em;
+    flex-wrap: wrap;
+  }
+  .next-step .tag {
+    flex: none;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.76em;
+    letter-spacing: 0.03em;
+    color: #6d28d9;
+  }
+  .next-step .text { color: var(--text); }
+  .next-step .ref { color: var(--muted); font-size: 0.88em; }
+  .pipeline-wrap {
+    overflow-x: auto;
+    padding: 28px 24px 40px;
+  }
+  .pipeline {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    min-width: max-content;
+  }
+  .stage {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    width: 190px;
+    flex: none;
+    padding: 14px 14px 16px;
+  }
+  .stage-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+  }
+  .stage-header .num {
+    font-size: 0.72em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .stage-header .name {
+    font-size: 0.95em;
+    font-weight: 700;
+    color: var(--primary-dark);
+  }
+  .stage-progress {
+    font-size: 0.72em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .stage ul { list-style: none; margin: 0; padding: 0; }
+  .stage li {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.83em;
+    padding: 4px 0;
+  }
+  .arrow {
+    flex: none;
+    align-self: flex-start;
+    color: var(--muted);
+    font-size: 1.4em;
+    padding: 0 6px;
+    margin-top: 20px;
+  }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.82em;
+    padding: 0 24px 28px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Roadmap do Projeto — payment-service</h1>
+  <p>Payment Service — resumo visual por etapa (ver roadmap.md para o detalhe)</p>
+</header>
+
+<div class="legend">
+  <span><span class="dot done"></span> Concluído</span>
+  <span><span class="dot partial"></span> Incompleto</span>
+  <span><span class="dot ready"></span> Sem dependências pendentes, pronto para começar</span>
+  <span><span class="dot blocked"></span> Bloqueado por dependência</span>
+</div>
+
+<div class="next-step" id="next-step"></div>
+
+<div class="pipeline-wrap">
+  <div class="pipeline" id="pipeline"></div>
+</div>
+
+<footer>
+  Instanciado a partir de template-roadmap.html (codepump) — companheiro visual de roadmap.md
+</footer>
+
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="modal-title"></h3>
+      <button class="modal-close" id="modal-close" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="modal-status" id="modal-status"></div>
+    <div id="modal-body"></div>
+    <button class="modal-copy" id="modal-copy">Copiar lista</button>
+  </div>
+</div>
+
+<script>
+  const NEXT_STEP = {
+    text: "Documentação inicial completa (etapas 2 a 8), a partir do documento funcional fornecido pelo usuário (2026-08-13) e da adoção direta do padrão organizacional (padrao-desenvolvimento.md), com um desvio explícito e documentado (Payment é imutável, sem remoção lógica, ADR-006 — mais rigidez que o padrão, não menos; e comunicação HTTP síncrona em vez de RabbitMQ, ADR-010, mesmo padrão de billing-service). Implementação/Código (etapa 9) pode começar para E1 (Payment) e E4 (Auditoria). Três Hotspots seguem abertos (H01 provedor real ainda não escolhido, H02 mecanismo de autenticidade de webhook — depende de H01, H03 leitura assumida do escopo de estorno reativo) — H01/H02 bloqueiam de fato a integração real de E2 (Confirmação do Provedor) e, por consequência, de E3 (Integração com Billing Service); mitigado implementando E2 atrás da abstração PaymentProvider (ADR-015).",
+    ref: "dominio/01-event-storming-big-picture.md (Hotspots) · arquitetura/decisoes/ADR-006, ADR-015, ADR-016 · planejamento/21-user-stories.md",
+  };
+
+  const STAGES = [
+    { num: "2", name: "Negócio", items: [
+      { label: "Processos", status: "done" },
+      { label: "Atores", status: "done" },
+      { label: "Eventos", status: "done" },
+      { label: "Comandos", status: "done" },
+      { label: "Decisões", status: "done" },
+      { label: "Regras de negócio", status: "done" },
+      { label: "Exceções", status: "done" },
+      { label: "Termos", status: "done" },
+    ]},
+    { num: "3", name: "Domínio", items: [
+      { label: "Bounded Contexts", status: "done" },
+      { label: "Context Map", status: "done" },
+      { label: "Entidades", status: "done" },
+      { label: "Value Objects", status: "done" },
+      { label: "Agregados", status: "done" },
+      { label: "Serviços de domínio", status: "done" },
+      { label: "Eventos de domínio", status: "done" },
+      { label: "Ciclos de vida", status: "done" },
+    ]},
+    { num: "4", name: "Requisitos", items: [
+      { label: "Funcionais", status: "done" },
+      { label: "Não funcionais", status: "done" },
+      { label: "Critérios de aceite", status: "done" },
+    ]},
+    { num: "5", name: "Arquitetura", items: [
+      { label: "Componentes", status: "done" },
+      { label: "Banco de dados", status: "done" },
+      { label: "Infraestrutura", status: "done" },
+      { label: "Autenticação/Autorização", status: "done" },
+      { label: "ADRs", status: "done" },
+    ]},
+    { num: "6", name: "Contratos", items: [
+      { label: "APIs", status: "done" },
+      { label: "Requests/Responses", status: "done" },
+      { label: "Versionamento", status: "done" },
+      { label: "Contratos de evento", status: "done" },
+    ]},
+    { num: "7", name: "Modelo de Dados", items: [
+      { label: "Tabelas", status: "done" },
+      { label: "Relacionamentos", status: "done" },
+      { label: "Índices/Constraints", status: "done" },
+      { label: "Migrações", status: "partial", missing: [
+        "Ordem de arquivos golang-migrate sugerida em 19-data-model.md — execução real fica para a etapa Implementação",
+      ] },
+    ]},
+    { num: "8", name: "Planejamento", items: [
+      { label: "Épicos", status: "done" },
+      { label: "Histórias", status: "done" },
+      { label: "Backend", status: "done" },
+      { label: "Frontend", status: "done" },
+      { label: "Banco", status: "done" },
+      { label: "Testes", status: "done" },
+    ]},
+    { num: "9", name: "Implementação", items: [
+      { label: "Código", status: "none", dependsOn: ["Planejamento/Histórias", "Contratos/APIs", "Modelo de Dados/Tabelas"] },
+      { label: "Regras de negócio", status: "none", dependsOn: ["Implementação/Código"] },
+      { label: "Padrões", status: "done" },
+      { label: "Integração com Payment Provider", status: "none", missing: [
+        { topic: "H01 em aberto — nome do provedor real ainda não escolhido pela empresa; documentação assume PROVIDER_A provisoriamente", suggestion: "Implementar E2 (Confirmação do Provedor) atrás da abstração PaymentProvider (ADR-015), para isolar a troca do provedor real do restante do domínio." },
+        { topic: "H02 em aberto — mecanismo exato de validação de autenticidade de webhook, depende diretamente de H01", suggestion: "Definir junto com a escolha do provedor real — cada provedor tem seu próprio esquema de assinatura." },
+      ] },
+    ]},
+    { num: "10", name: "Testes", items: [
+      { label: "Unitários", status: "none", dependsOn: ["Implementação/Código"] },
+      { label: "Integração", status: "none", dependsOn: ["Implementação/Código"] },
+      { label: "Contrato", status: "none", dependsOn: ["Implementação/Código", "Contratos/APIs"] },
+      { label: "End-to-end", status: "none", dependsOn: ["Implementação/Código"] },
+    ]},
+    { num: "11", name: "Segurança", items: [
+      { label: "Autenticação", status: "done" },
+      { label: "Autorização", status: "done" },
+      { label: "Secrets", status: "done" },
+      { label: "Auditoria", status: "done" },
+    ]},
+    { num: "12", name: "Observabilidade", items: [
+      { label: "Logs", status: "done" },
+      { label: "Métricas", status: "none", missing: [
+        { topic: "Nenhuma métrica de aplicação foi especificada pelo documento funcional fornecido pelo usuário", suggestion: "Definir métricas de referência (ex.: payments_created, payments_approved, payments_rejected, latência de confirmação do provedor) quando a etapa de Observabilidade for priorizada — mesmo padrão de billing-service/person-service." },
+      ] },
+      { label: "Tracing", status: "none", dependsOn: ["Implementação/Código"] },
+      { label: "Alertas", status: "none", dependsOn: ["Observabilidade/Logs", "Observabilidade/Métricas"] },
+    ]},
+    { num: "13", name: "CI/CD", items: [
+      { label: "Build", status: "none", dependsOn: ["Implementação/Código"] },
+      { label: "Testes automáticos", status: "none", dependsOn: ["Testes/Unitários"] },
+      { label: "Security scan", status: "none", dependsOn: ["CI/CD/Build"] },
+      { label: "Deploy automatizado", status: "none", dependsOn: ["CI/CD/Build", "Ambientes/DEV"] },
+    ]},
+    { num: "14", name: "Ambientes", items: [
+      { label: "DEV", status: "none", missing: [
+        { topic: "Provisionar ambiente de desenvolvimento", suggestion: "docker-compose local com PostgreSQL e um stub/mock de Payment Provider — não precisa esperar HML/PRD (ADR-017)." },
+      ] },
+      { label: "HML", status: "none", dependsOn: ["Ambientes/DEV"] },
+      { label: "PRD", status: "none", dependsOn: ["Ambientes/HML"] },
+    ]},
+    { num: "15", name: "Homologação", items: [
+      { label: "QA", status: "none", dependsOn: ["CI/CD/Testes automáticos", "Ambientes/HML"] },
+      { label: "Validação do negócio", status: "none", dependsOn: ["Homologação/QA"] },
+      { label: "Aprovação", status: "none", dependsOn: ["Homologação/Validação do negócio"] },
+    ]},
+    { num: "16", name: "Deploy", items: [
+      { label: "Checklist pré-deploy", status: "none", dependsOn: ["Homologação/Aprovação"] },
+      { label: "Rastreabilidade", status: "none", missing: [
+        { topic: "Definir como rastrear versão publicada e responsável", suggestion: "Tag de versão do git + changelog automático (ex.: semantic-release)." },
+      ] },
+      { label: "Plano de rollback", status: "none", dependsOn: ["Ambientes/PRD"] },
+    ]},
+    { num: "17", name: "Operação", items: [
+      { label: "Monitoramento", status: "none", dependsOn: ["Observabilidade/Alertas", "Ambientes/PRD"] },
+      { label: "Procedimentos de incidente", status: "none", dependsOn: ["Operação/Monitoramento"] },
+    ]},
+    { num: "18", name: "Evolução", items: [
+      { label: "Novas necessidades", status: "done" },
+      { label: "Atualização de docs", status: "done" },
+    ]},
+  ];
+
+  document.getElementById("next-step").innerHTML = `
+    <span class="tag">Próximo passo</span>
+    <span class="text">${NEXT_STEP.text}</span>
+    <span class="ref">${NEXT_STEP.ref}</span>
+  `;
+
+  // Resolve "Etapa/Item" -> { stage, item } dentro de STAGES.
+  function findItem(ref) {
+    for (const stage of STAGES) {
+      if (!ref.startsWith(stage.name + "/")) continue;
+      const itemLabel = ref.slice(stage.name.length + 1);
+      const item = stage.items.find(i => i.label === itemLabel);
+      if (item) return { stage, item };
+    }
+    return null;
+  }
+
+  function resolveColor(item) {
+    if (item.status === "done") return "done";
+    if (item.status === "partial") return "partial";
+    const deps = item.dependsOn || [];
+    const unmet = deps.some(ref => {
+      const found = findItem(ref);
+      return !found || found.item.status !== "done";
+    });
+    return unmet ? "blocked" : "ready";
+  }
+
+  const pipeline = document.getElementById("pipeline");
+  STAGES.forEach((stage, sIdx) => {
+    const div = document.createElement("div");
+    div.className = "stage";
+    const done = stage.items.filter(it => it.status === "done").length;
+    div.innerHTML = `
+      <div class="stage-header">
+        <span class="num">${stage.num}</span>
+        <span class="name">${stage.name}</span>
+      </div>
+      <div class="stage-progress">${done}/${stage.items.length} concluído</div>
+      <ul>
+        ${stage.items.map((it, iIdx) => {
+          const color = resolveColor(it);
+          const clickable = color !== "done";
+          return `<li class="${clickable ? "clickable" : ""}" ${clickable ? `data-stage="${sIdx}" data-item="${iIdx}"` : ""}><span class="dot ${color}" ${clickable ? `data-stage="${sIdx}" data-item="${iIdx}"` : ""}></span>${it.label}</li>`;
+        }).join("")}
+      </ul>
+    `;
+    pipeline.appendChild(div);
+    if (sIdx < STAGES.length - 1) {
+      const arrow = document.createElement("div");
+      arrow.className = "arrow";
+      arrow.textContent = "→";
+      pipeline.appendChild(arrow);
+    }
+  });
+
+  // --- Modal: dependência pendente mostra só "Depende de: ..."; senão, mostra a tabela Tópico | Sugestão ---
+  const overlay = document.getElementById("modal-overlay");
+  const modalTitle = document.getElementById("modal-title");
+  const modalStatus = document.getElementById("modal-status");
+  const modalBody = document.getElementById("modal-body");
+  const modalCopy = document.getElementById("modal-copy");
+  const COLOR_LABEL = { partial: "Incompleto", blocked: "Bloqueado por dependência", ready: "Pronto para começar" };
+  let copyText = "";
+
+  function normalizeTopic(m) {
+    return typeof m === "string" ? { topic: m, suggestion: "" } : { topic: m.topic, suggestion: m.suggestion || "" };
+  }
+
+  function openModal(stageIdx, itemIdx) {
+    const stage = STAGES[stageIdx];
+    const item = stage.items[itemIdx];
+    const color = resolveColor(item);
+
+    modalTitle.textContent = `${stage.name} — ${item.label}`;
+    modalStatus.textContent = COLOR_LABEL[color] || color;
+
+    if (color === "blocked") {
+      const deps = item.dependsOn || [];
+      modalBody.innerHTML = `<ul>${deps.map(ref => `<li>Depende de: ${ref}</li>`).join("")}</ul>`;
+      copyText = `${stage.name} — ${item.label} (${COLOR_LABEL[color] || color})\n` +
+        deps.map(ref => `- Depende de: ${ref}`).join("\n");
+    } else {
+      const rows = (item.missing && item.missing.length)
+        ? item.missing.map(normalizeTopic)
+        : [{ topic: "Nenhum detalhe registrado — edite o campo 'missing' deste item.", suggestion: "" }];
+      modalBody.innerHTML = `
+        <table class="modal-table">
+          <thead><tr><th>Tópico</th><th>Sugestão</th></tr></thead>
+          <tbody>${rows.map(r => `<tr><td>${r.topic}</td><td>${r.suggestion || "—"}</td></tr>`).join("")}</tbody>
+        </table>`;
+      copyText = `${stage.name} — ${item.label} (${COLOR_LABEL[color] || color})\n` +
+        rows.map(r => `- ${r.topic}${r.suggestion ? ` — Sugestão: ${r.suggestion}` : ""}`).join("\n");
+    }
+
+    modalCopy.textContent = "Copiar lista";
+    modalCopy.classList.remove("copied");
+    overlay.classList.add("open");
+  }
+
+  function closeModal() { overlay.classList.remove("open"); }
+
+  pipeline.addEventListener("click", (e) => {
+    const target = e.target.closest("[data-stage][data-item]");
+    if (!target) return;
+    openModal(Number(target.dataset.stage), Number(target.dataset.item));
+  });
+
+  document.getElementById("modal-close").addEventListener("click", closeModal);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) closeModal(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+
+  modalCopy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(copyText);
+    } catch (err) {
+      const ta = document.createElement("textarea");
+      ta.value = copyText;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    modalCopy.textContent = "Copiado!";
+    modalCopy.classList.add("copied");
+    setTimeout(() => { modalCopy.textContent = "Copiar lista"; modalCopy.classList.remove("copied"); }, 1500);
+  });
+</script>
+
+</body>
+</html>
