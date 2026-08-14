@@ -102,7 +102,7 @@ Um dos dois valores possíveis do campo `type` de um Payment — representa uma 
 
 ## Perfil
 
-Identificador de autorização atribuído a uma Aplicação em `auth-service`, avaliado na claim `profiles.PAYMENT_SERVICE` do JWT (BD-04). Catálogo: `PAYMENT_READ`, `PAYMENT_CREATE`, `PAYMENT_CANCEL`, `PAYMENT_REFUND`.
+Identificador de autorização atribuído a uma Aplicação em `auth-service`, avaliado na entrada de `profiles` com `app: PAYMENT_SERVICE` do JWT (BD-04). Catálogo: `PAYMENT_READ`, `PAYMENT_CREATE`, `PAYMENT_CANCEL`, `PAYMENT_REFUND`.
 
 ---
 
