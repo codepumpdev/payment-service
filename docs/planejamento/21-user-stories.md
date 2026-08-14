@@ -9,7 +9,7 @@
 ## Convenção da divisão Backend/Frontend/Banco/Testes
 
 * **Backend:** endpoint HTTP (`../contratos/17-api-contracts.md`), quando existir.
-* **Frontend:** o documento funcional fornecido pelo usuário não define nenhum Painel Administrativo para este serviço — "N/A" em toda História desta versão.
+* **Frontend:** o documento funcional fornecido pelo usuário não define nenhum Painel Administrativo para este serviço — "N/A" em toda História desta versão. **Exceção (2026-08-14):** a tela administrativa `GET /admin/config` (Interface Web de Configuração — `arquitetura/decisoes/ADR-020-interface-web-configuracao.md`) é a única superfície de UI desta versão, adotada por padrão organizacional (`padrao-desenvolvimento.md` seção 23), não por requisito funcional próprio — administra a configuração do serviço, transversal às Histórias, não uma delas.
 * **Banco:** tabela(s) de `../modelo-dados/19-data-model.md` afetadas.
 * **Testes:** Unitário, Integração, Contrato, E2E (`padrao-desenvolvimento.html`, seção 10).
 

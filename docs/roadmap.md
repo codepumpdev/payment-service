@@ -4,7 +4,7 @@
 > Status possíveis: `Pendente` · `Em andamento` · `Bloqueado` · `Feito`
 > No companheiro visual (`roadmap.html`), cada item aparece como: 🟢 Feito · 🟡 Incompleto · 🔵 Sem dependências pendentes, pronto para começar · ⚪ Bloqueado por dependência
 
-**Última atualização:** 2026-08-13
+**Última atualização:** 2026-08-14 (ADR-020 — Interface Web de Configuração `/admin/config`, `padrao-desenvolvimento.md` seção 23)
 
 ---
 
@@ -15,6 +15,8 @@
 Este serviço tem duas particularidades que o distinguem de todos os demais já documentados: (1) diferente de `billing-service` (que representa a obrigação financeira e desvia do padrão de mensageria por HTTP síncrono), `payment-service` executa a movimentação financeira real — é o único serviço com um agregado explicitamente **imutável** após a criação (`Payment` nunca é editado nem removido, ADR-006 — sem análogo de "remoção lógica" nenhum, desviando também desse padrão organizacional, mas na direção de mais rigidez, não menos); (2) depende de um `Payment Provider` externo cujo nome real ainda não foi escolhido pela empresa — isso está na raiz de dois dos três Hotspots abertos (H01, H02).
 
 Com Domínio, Requisitos, Arquitetura, Contratos, Modelo de Dados e Planejamento completos, `Implementação/Código` (etapa 9) tem todas as suas dependências satisfeitas e pode começar — desde que a integração com o `Payment Provider` (E2, `20-epics.md`) seja implementada atrás da abstração `PaymentProvider` (BD-13, ADR-015), isolando o maior risco de retrabalho do plano.
+
+**Atualização (2026-08-13):** dois padrões organizacionais novos (`padrao-desenvolvimento.md`, seções 8.2 e 12) foram adotados neste serviço no mesmo lote — banco de dados exclusivo (ADR-018, já era de fato assim) e Health Check/Readiness Check/Identificação de Build (ADR-019, `GET /health`/`GET /ready` nunca antes formalizados). Confirmado, na mesma ADR-019, que este serviço já está em conformidade com o terceiro padrão organizacional da mesma data (Tarefas Agendadas via `scheduler-service`, seção 13) — nenhum job interno a migrar (`contratos/18-event-contracts.md`). Um novo Hotspot (H04 — se `Billing Service`/`Person Service` são dependências obrigatórias do `/ready`, dado que a chamada síncrona bloqueante de cada um é restrita a uma fração dos endpoints) foi registrado, reaproveitando o precedente já aberto por `person-service` (Hotspot H05 daquele serviço) para o mesmo tipo de ambiguidade. `Implementação/Código` (etapa 9) continua com todas as dependências satisfeitas — a mudança não adiciona nem remove pré-requisito, só formaliza contratos que a implementação já precisaria seguir. Ver "Concluído", abaixo, para o detalhe completo.
 
 Referência: `dominio/01-event-storming-big-picture.md` (Hotspots), `planejamento/21-user-stories.md`
 
@@ -27,8 +29,8 @@ Referência: `dominio/01-event-storming-big-picture.md` (Hotspots), `planejament
 | 2 | Descoberta do Negócio | Feito |
 | 3 | Definição do Domínio | Feito *(Bounded Contexts, Context Map, Entidades, Value Objects, Agregados, Serviços de Domínio, Eventos, Ciclos de Vida — `01-event-storming-big-picture.md` a `09-domain-state-machines.md`; 19 Decisões de Negócio, 9 Event Stories)* |
 | 4 | Requisitos | Feito *(9 Funcionais, 12 Não Funcionais e Critérios de Aceite — `10-functional-requirements.md` a `12-acceptance-criteria.md`)* |
-| 5 | Arquitetura | Feito *(Componentes, Infraestrutura, Autenticação/Autorização, 17 ADRs — `13-architecture.md`, `15-infrastructure.md`, `arquitetura/decisoes/`)* |
-| 6 | Contratos | Feito *(APIs — `17-api-contracts.md`, 7 seções; eventos internos + comunicação HTTP síncrona com `Billing Service`/`Person Service`/`Payment Provider` — `18-event-contracts.md`, sem Message Broker, ADR-010)* |
+| 5 | Arquitetura | Feito *(Componentes, Infraestrutura, Autenticação/Autorização, 19 ADRs — ADR-018/ADR-019 adicionadas em 2026-08-13 — `13-architecture.md`, `15-infrastructure.md`, `arquitetura/decisoes/`)* |
+| 6 | Contratos | Feito *(APIs — `17-api-contracts.md`, 8 seções — Health/Ready/Build, ADR-019, adicionada em 2026-08-13; eventos internos + comunicação HTTP síncrona com `Billing Service`/`Person Service`/`Payment Provider` — `18-event-contracts.md`, sem Message Broker, ADR-010)* |
 | 7 | Modelo de Dados | Feito *(quatro tabelas — `payments`, `payment_status_history`, `payment_provider_events`, `audit_logs` — `19-data-model.md`; migrações sugeridas, execução real fica para Implementação)* |
 | 8 | Planejamento do Desenvolvimento | Feito *(4 Épicos, 8 Histórias — RF-04 incorporada à História de RF-01, sem História própria — `20-epics.md`, `21-user-stories.md`)* |
 | 9 | Implementação | Pendente |
@@ -72,12 +74,55 @@ Referência: `dominio/01-event-storming-big-picture.md` (Hotspots), `planejament
 - [ ] H01 — Qual provedor de pagamento (`Payment Provider`) será efetivamente integrado — a especificação usa nomes ilustrativos ("Provider A", "Provider B"), nenhum foi escolhido. Assumido provisoriamente como `PROVIDER_A`. Ver `dominio/01-event-storming-big-picture.md`.
 - [ ] H02 — Mecanismo exato de validação de autenticidade de um webhook de confirmação — depende diretamente de H01 (cada provedor tem seu próprio esquema de assinatura).
 - [ ] H03 — Se o estorno relatado de forma reativa pelo provedor (fora de qualquer endpoint deste serviço) está mesmo dentro do escopo desta versão, ou se os status/eventos de estorno deveriam ficar totalmente fora do MVP — o documento funcional tem trechos que se tensionam (seção 9/25 incluem os status/catálogo de estorno "desde o início"; seção 24/35 dizem "implemente posteriormente"). Resolvido nesta rodada como leitura assumida (BD-08, ADR-016): estorno reativo faz parte do domínio do MVP; nenhum endpoint de iniciar estorno é implementado. Ver `12-acceptance-criteria.md`, Valores Assumidos.
+- [ ] H04 — *(Adicionado em 2026-08-13, junto de ADR-019.)* Se `Billing Service` (e, com restrição ainda maior, `Person Service`) são dependências obrigatórias do `GET /ready` deste serviço — cada um tem uma chamada síncrona genuinamente bloqueante (BD-11/BD-16), mas restrita ao endpoint de criação (e, para `Person Service`, só ao subtipo `PAY` dentro dele). A regra organizacional (`padrao-desenvolvimento.md`, seção 12.3) não cobre esse cenário de "bloqueante só para um subconjunto de endpoints" — mesma lacuna já identificada por `person-service` (Hotspot H05 daquele serviço). ADR-019 decide, por ora, não incluir nenhum dos dois no `/ready`, reaproveitando o mesmo raciocínio.
 
-Nenhum dos três bloqueia o início da etapa de Implementação para E1 (Payment) e E4 (Auditoria); **H01/H02 bloqueiam de fato a integração real do E2** (Confirmação do Provedor) e, por consequência de runtime, do E3 (Integração com Billing Service) — mitigado implementando E2 atrás da abstração `PaymentProvider` (BD-13, ADR-015) desde o início, para que a escolha real do provedor não exija redesenho do domínio.
+Nenhum dos quatro bloqueia o início da etapa de Implementação para E1 (Payment) e E4 (Auditoria); **H01/H02 bloqueiam de fato a integração real do E2** (Confirmação do Provedor) e, por consequência de runtime, do E3 (Integração com Billing Service) — mitigado implementando E2 atrás da abstração `PaymentProvider` (BD-13, ADR-015) desde o início, para que a escolha real do provedor não exija redesenho do domínio. H04 não bloqueia nada — é uma questão de classificação de `/ready`, não de comportamento funcional.
 
 ---
 
 ## Concluído
+
+### 2026-08-14 — ADR-020: Interface Web de Configuração (`/admin/config`)
+
+Adoção do padrão organizacional de **Interface Web de Configuração** (`padrao-desenvolvimento.md` seção 23; `codepump/docs/padroes-implementacao/padrao-interface-config.md`), obrigatório para todo serviço com configuração programável e sem UI administrativa própria — `payment-service` está nominalmente na lista abrangida.
+
+**Nova ADR — ADR-020** (`arquitetura/decisoes/`): formaliza a tela `GET /admin/config`, servida pela própria aplicação Go (`net/http` + `html/template` + HTMX + CSS, sem SPA, recursos em `internal/web/` via `embed`), protegida por perfil administrativo validado no backend (seção 9), contraparte humana do `/props` (seção 16). Enumera as categorias de configuração reais (Aplicação, Banco, Serviços internos, Serviços externos, Mensageria, Operacional), distinguindo read-only (host/porta/build/`environment`/banco lógico) de editável (timeouts de chamada HTTP — ADR-010, provedor de pagamento ativo — ADR-015, timeout do Readiness Check), com efeito imediato × exige reinicialização sinalizado. Segredos (senha do banco, `client_secret` M2M, chave/segredo de webhook do provedor, credencial do RabbitMQ) **nunca** exibidos — OpenBao (ADR-008), só indicador booleano. Mudanças de configuração auditadas via `AuditEvent` canônico (`resource = CONFIG`, `data` com propriedade + valor anterior/novo, nunca sensível — seção 17). Sem API paralela: reutiliza os GET padronizados (seção 20). Fase de documentação — fixa o escopo/padrão da tela, não o HTML real.
+
+Propagado para: `produto/visao-do-produto.md` (nota na seção 6 — Segurança), `planejamento/21-user-stories.md` (exceção ao "Frontend N/A" da convenção), este roadmap.
+
+Referências: `arquitetura/decisoes/ADR-020-interface-web-configuracao.md`, `codepump/codepump/docs/padrao-desenvolvimento.md` (seção 23), `codepump/codepump/docs/padroes-implementacao/padrao-interface-config.md`.
+
+---
+
+### 2026-08-14 — Auditoria Centralizada via `audit-service`: RabbitMQ uso exclusivo para auditoria
+
+Alinhamento ao padrão organizacional de Auditoria Centralizada (`codepump/codepump/docs/padrao-desenvolvimento.md`, seção 17 — obrigatório para `payment-service`, citado nominalmente na seção 17). Até aqui, `payment-service` auditava suas operações financeiras **apenas** via eventos de domínio despachados em memória e consumidos pelo módulo de Auditoria interno (BC-02), sem publicar em nenhum broker (ADR-010). A partir desta data, o serviço passa a **publicar cada operação financeira relevante no exchange `audit.events` via RabbitMQ**, no formato do `AuditEvent` canônico da `codepump-lib` (seções 17.3/18) — RabbitMQ **usado exclusivamente para auditoria** (publicador, nunca consumidor; nenhuma fila própria de negócio), mesmo padrão de `organization-service` (ADR-011) e `alert-service` (ADR-010). A comunicação de negócio (`Billing Service`/`Person Service`/`Notification Service`/`Payment Provider`) permanece em HTTP síncrono — o desvio de ADR-010 segue válido, restrito à mensageria de negócio. Como este serviço movimenta dinheiro, a auditoria centralizada de `PAYMENT`/`REFUND`/aprovação/rejeição/cancelamento é de alta relevância de rastreabilidade (BD-18).
+
+Convenção de correção aplicada (`padrao-desenvolvimento.md`, seção 1): o texto conflitante ("nenhum broker / auditoria só em memória") foi **riscado** (`~~...~~`) com nota datada, nunca removido.
+
+Mapeamento do catálogo fechado (BD-18) para o `AuditEvent` (`application: payment-service`, `resource: PAYMENT`, `resourceId: paymentId`): `PAYMENT_CREATED`→`CREATE`; `PAYMENT_APPROVED`→`APPROVE`; `PAYMENT_REJECTED`→`REJECT`; `PAYMENT_CANCELLED`→`CANCEL`; `PAYMENT_REFUNDED`/`PAYMENT_PARTIALLY_REFUNDED`→`REFUND`. Operações que falham também são auditadas (`success: false`). Publicação best-effort, Publisher Confirms, routing key `audit.event.published`, credencial via OpenBao. RabbitMQ não entra no `GET /ready` (ADR-019) — coerente com a natureza best-effort da publicação.
+
+Propagado para: `arquitetura/decisoes/ADR-010-comunicacao-http-sincrona-sem-rabbitmq.md` (Decisão riscada/emendada + nota de integração), `dominio/03-business-decisions.md` (BD-14, BD-18 emendadas), `arquitetura/13-architecture.md` ("Não depende de" riscado; nova nota de publicação de auditoria em "Eventos internos"), `arquitetura/15-infrastructure.md` (credencial RabbitMQ nos segredos + nova seção "RabbitMQ — Uso Exclusivo para Auditoria"), `contratos/18-event-contracts.md` (cabeçalho riscado + nova seção "Auditoria — Publicação em `audit.events`"), `produto/visao-do-produto.md` (seções 3 e 9), este roadmap.
+
+Referências: `codepump/codepump/docs/padrao-desenvolvimento.md` (seções 17, 17.3, 18), `organization-service/docs/arquitetura/decisoes/ADR-011-rabbitmq-uso-exclusivo-auditoria.md`, `alert-service/docs/arquitetura/decisoes/ADR-010-rabbitmq-uso-exclusivo-auditoria.md`.
+
+---
+
+### 2026-08-13 — ADR-018/ADR-019: Banco de Dados Exclusivo + Health Check/Readiness Check/Identificação de Build
+
+Adoção de dois padrões organizacionais definidos em `codepump/codepump/docs/padrao-desenvolvimento.md` no mesmo dia (seções 8.2 e 12, 2026-08-13), obrigatórios para todos os serviços já documentados, incluindo `payment-service` (citado nominalmente nas duas).
+
+**Nova ADR — ADR-018** (`arquitetura/decisoes/`): formaliza o banco lógico `payment` como exclusivo deste serviço (já era de fato assim, BD-17) — instância física pode ser compartilhada por economia (ADR-007), banco lógico/schema/tabela nunca.
+
+**Nova ADR — ADR-019** (`arquitetura/decisoes/`): contrato completo de `GET /health` (liveness) e `GET /ready` (readiness) + geração de `build.properties`. Dependências obrigatórias do `/ready`: banco `payment` e `auth-service` (via `GET /health` dele). `Billing Service`, `Person Service`, `Payment Provider`, `Notification Service`, OpenBao e RabbitMQ **não** são obrigatórias — `Notification Service`/OpenBao por reaproveitamento direto de precedentes já registrados (`auth-service` ADR-023, `billing-service` ADR-018 daquele serviço); `Payment Provider` por não ter mecanismo de health-check oficial disponível ainda (Hotspot H01) e pela proibição organizacional de testar disponibilidade com uma transação real; `Billing Service`/`Person Service` por decisão registrada como **novo Hotspot H04** — ambos têm uma chamada síncrona genuinamente bloqueante (BD-11/BD-16), mas restrita a uma fração dos endpoints (criação, e para `Person Service` só o subtipo `PAY`), mesmo cenário de ambiguidade real já identificado por `person-service` (Hotspot H05 daquele serviço) e não coberto explicitamente pela regra organizacional (seção 12.3).
+
+**Nota de conformidade:** confirmado, na mesma ADR-019, que este serviço já está em conformidade com o terceiro padrão organizacional da mesma data (Tarefas Agendadas via `scheduler-service`, `padrao-desenvolvimento.md` seção 13) — `contratos/18-event-contracts.md`, seção "Jobs Internos — Não São Eventos de Domínio", já documentava a ausência de qualquer job periódico interno; nenhuma migração foi necessária.
+
+Propagado para: `dominio/03-business-decisions.md` (BD-17 emendada, referenciando ADR-018/ADR-019), `dominio/01-event-storming-big-picture.md` (novo Hotspot H04), `arquitetura/13-architecture.md` (bullets de banco exclusivo e monitoração; seção "Job Interno" com nota de conformidade), `arquitetura/15-infrastructure.md` (bullet de exclusividade + novas subseções `build.properties` e Health/Readiness Check), `contratos/17-api-contracts.md` (nova seção 8 — Health/Ready/Build — e nova tabela "Resumo de Rotas"), `contratos/18-event-contracts.md` (nota de conformidade com a seção 13), este roadmap.
+
+Referências: `arquitetura/decisoes/ADR-018-banco-dados-exclusivo-por-servico.md`, `arquitetura/decisoes/ADR-019-health-check-readiness-check-build.md`, `codepump/codepump/docs/padrao-desenvolvimento.md` (seções 8.2, 12, 13).
+
+---
 
 ### 2026-08-13 — Documentação inicial completa: Visão do Produto a Planejamento (etapas 2 a 8)
 

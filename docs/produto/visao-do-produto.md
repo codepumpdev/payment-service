@@ -68,7 +68,7 @@ O serviço **não** é responsável por: criar pedidos, criar cobranças, contro
      └─────────────────────┘
 ```
 
-Serviço inteiramente síncrono (API REST sobre PostgreSQL) — sem mensageria nesta versão, mesmo perfil já adotado por `billing-service`: a comunicação com `Billing Service`/`Person Service`/`Notification Service`/provedor é HTTP direto. Ver `arquitetura/13-architecture.md` e ADR-010 (desvio deliberado do padrão organizacional de mensageria, mesma justificativa e mesmo padrão já registrado por `billing-service`, seção 2 de `padrao-desenvolvimento.md`).
+Serviço inteiramente síncrono (API REST sobre PostgreSQL) — ~~sem mensageria nesta versão~~ **sem mensageria de negócio** nesta versão, mesmo perfil já adotado por `billing-service`: a comunicação com `Billing Service`/`Person Service`/`Notification Service`/provedor é HTTP direto. Ver `arquitetura/13-architecture.md` e ADR-010 (desvio deliberado do padrão organizacional de mensageria, mesma justificativa e mesmo padrão já registrado por `billing-service`, seção 2 de `padrao-desenvolvimento.md`). **Atualização (2026-08-14):** RabbitMQ passa a ser usado **exclusivamente para publicar auditoria** no `audit-service` (`audit.events`, `padrao-desenvolvimento.md` seção 17) — a comunicação de negócio permanece HTTP síncrona; ver ADR-010 (emendada).
 
 ## 4. Comunicação com sistemas consumidores
 
@@ -110,6 +110,8 @@ O sistema consumidor guarda o `id` retornado (`paymentId`) — nunca reimplement
 
 Autenticação via JWT emitido pelo `auth-service` (ADR-001); autorização por Perfil (`PAYMENT_READ`, `PAYMENT_CREATE`, `PAYMENT_CANCEL`, `PAYMENT_REFUND`), concedidos por aplicação; nenhuma operação financeira sem autorização explícita; nunca persistir JWT, `client_secret`, senha, chave privada, CVV, senha bancária ou credencial de banco; nenhum dado sensível em log; auditoria das operações financeiras relevantes. Ver `dominio/03-business-decisions.md` e `requisitos/11-non-functional-requirements.md`.
 
+**Interface Web de Configuração (`/admin/config`).** Por adoção do padrão organizacional (`padrao-desenvolvimento.md` seção 23; `codepump/docs/padroes-implementacao/padrao-interface-config.md`), este serviço passa a expor uma tela administrativa `GET /admin/config` — servida pela própria aplicação Go (`html/template` + HTMX + CSS, sem SPA), protegida por perfil administrativo (seção 9), contraparte humana do `/props` (seção 16) — para administrar sua configuração programável (timeouts de chamada, provedor de pagamento ativo, parâmetros operacionais), nunca segredos, que permanecem no OpenBao. Mudanças de configuração são auditadas via `AuditEvent` canônico (seção 17). Detalhes e categorias em `arquitetura/decisoes/ADR-020-interface-web-configuracao.md`.
+
 ## 7. Observabilidade (visão geral)
 
 Logs estruturados (padrão organizacional, `padrao-desenvolvimento.md` seção 7.2), com `paymentId`/`billingId`/`provider`/`providerPaymentId`/`status`/`operation`/`correlationId`; health checks. Correlation ID (`X-Correlation-ID`) propagado para `Billing Service`, provedor e `Notification Service`, para rastrear uma operação completa de ponta a ponta.
@@ -131,8 +133,10 @@ Migração de schema golang-migrate — ADR-003
 JWT                golang-jwt/v5, emitido e validado via auth-service — ADR-001
 Segredos           OpenBao (Secrets Manager centralizado) — ADR-008
 Logs               /apps/logs/[namespace]/payment-service/, JSON estruturado — ADR-009
-Integrações        HTTP síncrono (Billing Service, Person Service, Notification Service, Provedor) — ADR-010, sem RabbitMQ nesta versão
+Integrações        HTTP síncrono (Billing Service, Person Service, Notification Service, Provedor) — ADR-010; RabbitMQ só para auditoria (audit.events) — seção 17, desde 2026-08-14
+Auditoria          audit-service via RabbitMQ (audit.events, AuditEvent da codepump-lib) — padrão, seções 17/18
 Infraestrutura     PostgreSQL em instância única no MVP — ADR-007/15-infrastructure.md
+Lib compartilhada  codepump-lib — funcionalidades técnicas padronizadas (padrão, seção 18)
 ```
 
 ## 10. Escopo da Primeira Versão (MVP)

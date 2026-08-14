@@ -210,7 +210,9 @@
 
 **Contexto:** `padrao-desenvolvimento.md` (seção 2) fixa RabbitMQ como ponto de partida padrão sempre que um novo serviço precisar desacoplar produtor e consumidor de forma assíncrona. O documento funcional deste serviço não pede explicitamente HTTP síncrono (diferente de `billing-service`, que tinha uma instrução textual direta nesse sentido) — mas toda a descrição de fluxo (seções 13, 14, 18, 26) descreve chamadas diretas request/response entre `Payment Service` e `Billing Service`/`Person Service`/`Notification Service`, sem nenhuma menção a fila.
 
-**Decisão:** `Payment Service` se comunica com `Billing Service`, `Person Service`, `Notification Service` e `Payment Provider` via chamada HTTP síncrona nesta versão — nenhum RabbitMQ, nenhuma fila, nenhum broker. Todos os seis eventos de domínio do catálogo inicial (`PAYMENT_CREATED`, `PAYMENT_PROCESSING`, `PAYMENT_APPROVED`, `PAYMENT_REJECTED`, `PAYMENT_CANCELLED`, `PAYMENT_REFUNDED`) são modelados como eventos de domínio (para fins de nomenclatura/documentação, `18-event-contracts.md`), mas transportados via HTTP direto, não via mensageria — mesma decisão de `billing-service`.
+**Decisão:** `Payment Service` se comunica com `Billing Service`, `Person Service`, `Notification Service` e `Payment Provider` via chamada HTTP síncrona nesta versão — ~~nenhum RabbitMQ, nenhuma fila, nenhum broker~~. Todos os seis eventos de domínio do catálogo inicial (`PAYMENT_CREATED`, `PAYMENT_PROCESSING`, `PAYMENT_APPROVED`, `PAYMENT_REJECTED`, `PAYMENT_CANCELLED`, `PAYMENT_REFUNDED`) são modelados como eventos de domínio (para fins de nomenclatura/documentação, `18-event-contracts.md`), mas transportados via HTTP direto, não via mensageria — mesma decisão de `billing-service`.
+
+**Atualização (2026-08-14):** este serviço passa a publicar auditoria no exchange `audit.events` via RabbitMQ (uso exclusivo para auditoria), conforme `padrao-desenvolvimento.md` seção 17 e o `AuditEvent` canônico da `codepump-lib` (seção 17.3/18) — mesmo padrão de `organization-service` (ADR-011) e `alert-service` (ADR-010). Publicação best-effort, nunca bloqueia a operação de negócio. O desvio desta BD permanece válido **para a comunicação de negócio** (`Billing Service`/`Person Service`/`Notification Service`/`Payment Provider` seguem em HTTP síncrono, sem fila); apenas deixa de ser verdade que o serviço não tem broker algum — RabbitMQ passa a existir **exclusivamente para auditoria** (publicador, nunca consumidor). Ver BD-18 (emendada), ADR-010 (emendada), `contratos/18-event-contracts.md` e `arquitetura/15-infrastructure.md`.
 
 **Impacto:** `arquitetura/13-architecture.md`; `arquitetura/15-infrastructure.md`; `contratos/18-event-contracts.md`; `requisitos/11-non-functional-requirements.md` (RNF, tensão registrada).
 
@@ -264,6 +266,8 @@
 - Positivas: cada serviço evolui seu próprio schema livremente, sem quebrar outro serviço.
 - Negativas: nenhuma — é o modelo já adotado por toda a organização.
 
+**Atualização (2026-08-13):** `padrao-desenvolvimento.md` (seção 8.2) formalizou este princípio como padrão organizacional obrigatório para todos os serviços, citando `payment-service` nominalmente — ver **ADR-018** para o detalhamento completo (banco lógico `payment`, exclusivo, compartilhamento só na camada física). Esta BD permanece válida como registro da decisão de negócio original; ADR-018 é a fonte arquitetural formal a partir de agora. Na mesma data, o padrão de Health Check/Readiness Check/Identificação de Build (seção 12) foi adotado por este serviço — ver **ADR-019** (nenhuma BD prévia sobre o assunto a emendar).
+
 ---
 
 ## BD-18 — Auditoria de Operações Financeiras — Catálogo Fechado
@@ -273,6 +277,8 @@
 **Decisão:** toda operação financeira relevante (`PAYMENT_CREATED`, `PAYMENT_APPROVED`, `PAYMENT_REJECTED`, `PAYMENT_CANCELLED`, `PAYMENT_REFUNDED`, `PAYMENT_PARTIALLY_REFUNDED`) gera um registro de auditoria com `paymentId`, `billingId`, `operation`, `application`, `actor`, `createdAt` — nunca dado financeiro sensível (chave Pix, conta bancária, CVV). Histórico de auditoria nunca é alterado depois de criado.
 
 *(Nota de 2026-08-13, verificação: `PAYMENT_PARTIALLY_REFUNDED` foi adicionado a este catálogo — a máquina de estados de BD-07/BD-08 já permite `APPROVED → PARTIALLY_REFUNDED` de forma reativa, e sem essa operação no catálogo, RF-09 não teria como registrar auditoria para essa transição.)*
+
+**Atualização (2026-08-14):** o catálogo fechado de operações auditadas permanece o mesmo; muda apenas o destino — além de qualquer registro local, cada operação financeira passa a ser projetada em um `AuditEvent` canônico da `codepump-lib` e **publicada no `audit-service` via RabbitMQ** (`audit.events`, uso exclusivo para auditoria, `padrao-desenvolvimento.md` seção 17), como publicador, nunca consumidor — mesmo padrão de `organization-service` (ADR-011) e `alert-service` (ADR-010). Publicação best-effort, nunca bloqueia a operação de negócio; operações que falham também são auditadas (`success: false`). Mapeamento para `action`/`resource` (`PAYMENT`/`REFUND`/`APPROVE`/`REJECT`/`CANCEL`/`CREATE` sobre `resource: PAYMENT`) em `contratos/18-event-contracts.md`. Ver BD-14 (emendada).
 
 **Impacto:** `19-data-model.md` (`audit_logs`); `contratos/18-event-contracts.md`.
 

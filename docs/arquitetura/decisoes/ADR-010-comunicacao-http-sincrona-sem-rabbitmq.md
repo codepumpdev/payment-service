@@ -9,7 +9,9 @@
 
 ## Decisão
 
-`Payment Service` se comunica com `Billing Service` (consulta + informe), `Person Service` (consulta), `Notification Service` (publicação de evento) e `Payment Provider` (envio da operação + webhook) via chamada HTTP síncrona nesta versão — **nenhum RabbitMQ, nenhuma fila, nenhum broker**. Todos os seis eventos de domínio do catálogo inicial (`PAYMENT_CREATED`, `PAYMENT_PROCESSING`, `PAYMENT_APPROVED`, `PAYMENT_REJECTED`, `PAYMENT_CANCELLED`, `PAYMENT_REFUNDED`) são modelados como eventos de domínio (para fins de nomenclatura/documentação, `18-event-contracts.md`), mas transportados via HTTP direto, não via mensageria — mesma decisão já adotada por `billing-service` (ADR-010 daquele serviço), agora estendida a um terceiro serviço financeiro da organização.
+`Payment Service` se comunica com `Billing Service` (consulta + informe), `Person Service` (consulta), `Notification Service` (publicação de evento) e `Payment Provider` (envio da operação + webhook) via chamada HTTP síncrona nesta versão — ~~**nenhum RabbitMQ, nenhuma fila, nenhum broker**~~. Todos os seis eventos de domínio do catálogo inicial (`PAYMENT_CREATED`, `PAYMENT_PROCESSING`, `PAYMENT_APPROVED`, `PAYMENT_REJECTED`, `PAYMENT_CANCELLED`, `PAYMENT_REFUNDED`) são modelados como eventos de domínio (para fins de nomenclatura/documentação, `18-event-contracts.md`), mas transportados via HTTP direto, não via mensageria — mesma decisão já adotada por `billing-service` (ADR-010 daquele serviço), agora estendida a um terceiro serviço financeiro da organização.
+
+**Atualização (2026-08-14):** este serviço passa a publicar auditoria no exchange `audit.events` via RabbitMQ (uso exclusivo para auditoria), conforme `padrao-desenvolvimento.md` seção 17 e o `AuditEvent` canônico da `codepump-lib` (seção 17.3/18) — mesmo padrão de `organization-service` (ADR-011) e `alert-service` (ADR-010). Publicação best-effort, nunca bloqueia a operação de negócio. O desvio original permanece válido **para a comunicação de negócio** (`Billing Service`/`Person Service`/`Notification Service`/`Payment Provider` seguem em HTTP síncrono, sem fila); o que muda é apenas que o broker deixa de estar totalmente ausente do serviço — passa a existir **exclusivamente para publicar auditoria**, como publicador, nunca consumidor (fila/DLX/DLQ de `audit.events` são mantidas por `audit-service`). Publisher Confirms habilitado; routing key `audit.event.published`; credencial de conexão via OpenBao (ADR-008). Especialmente relevante aqui: este serviço audita movimentação de dinheiro (`PAYMENT`/`REFUND`/aprovação/rejeição/cancelamento), operações de alta sensibilidade de rastreabilidade (BD-18).
 
 ## Consequências
 
@@ -34,4 +36,6 @@ Quando a necessidade de desacoplamento/processamento assíncrono for real — vo
 * `arquitetura/15-infrastructure.md`.
 * `contratos/18-event-contracts.md`.
 * `requisitos/11-non-functional-requirements.md` (RNF-09 — tensão registrada).
-* `codepump/codepump/docs/padrao-desenvolvimento.md`, seção 2.
+* `codepump/codepump/docs/padrao-desenvolvimento.md`, seção 2 (mensageria) e seção 17 (auditoria centralizada, adotada em 2026-08-14).
+* `arquitetura/15-infrastructure.md` — seção "RabbitMQ — Uso Exclusivo para Auditoria" (2026-08-14).
+* Precedentes do mesmo padrão: `organization-service` (ADR-011) e `alert-service` (ADR-010).

@@ -1,6 +1,6 @@
 # Infraestrutura — Payment Service
 
-> Cobre decisões de implantação e operação que não são regra de negócio (`../dominio/03-business-decisions.md`) nem arquitetura de componentes (`13-architecture.md`). Formalizado por ADR-007 (PostgreSQL), ADR-008 (segredos) e ADR-010 (comunicação HTTP síncrona). Adoção direta do padrão organizacional (`codepump/codepump/docs/padrao-desenvolvimento.md`, seções 8 e 8.1), com um desvio deliberado (ADR-010), mesmo perfil de `billing-service`.
+> Cobre decisões de implantação e operação que não são regra de negócio (`../dominio/03-business-decisions.md`) nem arquitetura de componentes (`13-architecture.md`). Formalizado por ADR-007 (PostgreSQL), ADR-008 (segredos), ADR-010 (comunicação HTTP síncrona), ADR-018 (banco de dados exclusivo) e ADR-019 (Health Check/Readiness Check/Identificação de Build). Adoção direta do padrão organizacional (`codepump/codepump/docs/padrao-desenvolvimento.md`, seções 8, 8.1, 8.2, 12 e 17 — Auditoria Centralizada via RabbitMQ, adotada em 2026-08-14), com um desvio deliberado, restrito à comunicação de negócio (ADR-010), mesmo perfil de `billing-service`.
 
 ---
 
@@ -9,6 +9,7 @@
 * **Instância única no MVP** — sem cluster, sem réplica de leitura, sem failover automático.
 * **Sem backup/restauração automatizados configurados inicialmente** — decisão padrão do MVP organizacional, sem desvio (mesma decisão de `billing-service`; diferente de `storage-service`, que optou por backup desde o MVP por natureza do próprio domínio).
 * Ponto único de falha (SPOF) aceito deliberadamente no MVP.
+* **Banco de dados lógico exclusivo: `payment`** (`CREATE DATABASE payment`, ADR-018) — adoção do padrão organizacional (`padrao-desenvolvimento.md`, seção 8.2). Nenhum outro serviço da organização acessa este banco, direta ou indiretamente (nem tabela, nem schema, nem view). A instância física PostgreSQL pode ser compartilhada com o banco lógico de outro serviço por economia de infraestrutura no MVP (acima) — o banco lógico, nunca.
 
 ---
 
@@ -19,6 +20,7 @@ Adoção direta do padrão organizacional — OpenBao como Secrets Manager centr
 * **Senha de conexão do PostgreSQL** — vai integralmente ao OpenBao, lida na inicialização, mantida em memória durante a execução.
 * **Credencial M2M própria** (`client_id`/`client_secret`, para obter Token de Serviço ao chamar `Billing Service`/`Person Service`/`Notification Service`) — vai ao OpenBao, mesmo tratamento.
 * **Credencial de integração com o Payment Provider** (chave de API, segredo de assinatura do webhook — Hotspot H01/H02) — vai integralmente ao OpenBao, mesmo tratamento dado a credenciais de provedor externo por `notification-service` (ADR-009 daquele serviço).
+* **Credencial de conexão do RabbitMQ** (para publicar em `audit.events` — adicionada em 2026-08-14, ADR-010/§17) — vai integralmente ao OpenBao, lida na inicialização, mantida em memória durante a execução.
 * Organização por ambiente: `kv/<ambiente>/payment-service/`.
 
 Nenhum segredo emitido por este serviço a terceiros (nenhum `client_secret` próprio distribuído) — a distinção hash-only vs. OpenBao (`padrao-desenvolvimento.md`, seção 8.1) não se aplica aqui; este serviço só **consome** segredos, nunca emite.
@@ -43,6 +45,41 @@ Adoção direta do padrão organizacional (`padrao-desenvolvimento.md`, seção 
 * **Inbound:** `Payment Provider` chama `Payment Service` diretamente (`POST /v1/payments/webhooks/{provider}`), autenticado por mecanismo próprio do provedor (Hotspot H02), não por JWT do `auth-service`.
 * **Outbound:** `Payment Service` chama `Billing Service` (consulta de valor disponível + informe de resultado), `Person Service` (dados de recebimento) e `Notification Service` (publicação de evento) diretamente, autenticado com Token de Serviço M2M próprio; chama o `Payment Provider` (envio da operação) com a credencial específica daquele provedor.
 * Nenhum retry automático interno nesta versão — falha de chamada outbound não desfaz a transação de banco já commitada; reprocessamento é responsabilidade operacional (assumido\*, ver `12-acceptance-criteria.md`).
+
+---
+
+## RabbitMQ — Uso Exclusivo para Auditoria (2026-08-14, ADR-010/§17)
+
+Adoção do padrão organizacional de Auditoria Centralizada (`padrao-desenvolvimento.md`, seção 17). Diferente de `notification-service` (mensageria como núcleo do produto), `payment-service` usa RabbitMQ **exclusivamente** para publicar eventos de auditoria no exchange `audit.events` — nenhuma fila própria de negócio, nenhum consumo de mensagens. A comunicação de negócio (`Billing Service`/`Person Service`/`Notification Service`/`Payment Provider`) permanece em HTTP síncrono (ADR-010, acima); o broker existe só para auditoria. Mesmo padrão de `organization-service` (ADR-011) e `alert-service` (ADR-010).
+
+* **Exchange publicado:** `audit.events` (`topic`, durable) — este serviço é **publicador**, nunca consumidor (consumo é exclusivo de `audit-service`).
+* **Routing key:** `audit.event.published`.
+* **Confirmação de publicação:** Publisher Confirms habilitado — publicação não confirmada é falha, nunca sucesso silencioso.
+* **Cliente Go:** `rabbitmq/amqp091-go` (`padrao-desenvolvimento.md`, seção 2).
+* **Formato:** `AuditEvent` canônico da `codepump-lib` (`padrao-desenvolvimento.md`, seções 17.3/18) — mapeamento das operações financeiras (BD-18) em `contratos/18-event-contracts.md`.
+* **Credencial de conexão** gerida via OpenBao (ADR-008; ver Gestão de Segredos Operacionais, acima).
+* **Falha de publicação nunca bloqueia a operação de negócio** — publicação best-effort, fora da transação já comitada / do processamento do webhook. RabbitMQ **não** é dependência do `GET /ready` (ADR-019) — coerente, pois a publicação de auditoria é assíncrona e best-effort.
+
+---
+
+## `build.properties` e Identificação de Build (ADR-019)
+
+Adoção direta do padrão organizacional (`padrao-desenvolvimento.md`, seção 12.1).
+
+* Gerado automaticamente durante o build (nunca manualmente pelo desenvolvedor), na raiz do artefato, pelo pipeline de CI/CD (etapa 13, hoje `Pendente`):
+  ```properties
+  branch=main
+  commit=ba996ad8715
+  buildDate=2026-08-13T14:30:00-03:00
+  ```
+* `branch`/`commit` vêm do processo de CI/CD (ou do build local) — nunca digitados manualmente; `buildDate` é o instante real de construção do artefato (ISO 8601 com timezone) — nunca o horário de inicialização do container. Um redeploy do mesmo artefato, sem novo build, nunca muda `buildDate`.
+* Lido uma única vez na inicialização do processo Go, mantido em memória, e exposto em `GET /health` (`17-api-contracts.md`).
+
+---
+
+## Health Check e Readiness Check (ADR-019)
+
+Adoção direta do padrão organizacional (`padrao-desenvolvimento.md`, seção 12.2/12.3) — `GET /health` (liveness) e `GET /ready` (readiness, verificando `database` e `auth-service`; `Billing Service`, `Person Service`, `Payment Provider`, `Notification Service`, OpenBao e RabbitMQ **não** entram nesse check — ver ADR-019 para o raciocínio completo, incluindo o Hotspot H04 sobre `Billing Service`/`Person Service`). Contrato completo em `contratos/17-api-contracts.md`.
 
 ---
 
