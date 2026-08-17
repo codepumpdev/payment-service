@@ -33,6 +33,7 @@ A tela exibe **apenas** as configurações administráveis, com as propriedades 
 - **Serviços externos** — provedor de pagamento **ativo** escolhido por configuração (enum/select, ADR-015, **exige reinicialização**); URL/endpoint do provedor (editável); timeout da chamada ao provedor (editável); chave de API e segredo de assinatura de webhook do provedor **nunca exibidos** (secrets — indicadores booleanos, ADR-008, Hotspot H01/H02).
 - **Mensageria** — host do RabbitMQ e exchange de auditoria `audit.events` (somente-leitura, §17); Publisher Confirms habilitado (somente-leitura); credencial de conexão **nunca exibida** (secret, OpenBao).
 - **Operacional** — timeout do Readiness Check (editável); limites de log (10 MB por arquivo, 10 arquivos, 100 MB por aplicação — somente-leitura, padrão organizacional, ADR-009).
+- **Retenção / Expurgo (editável — adicionado em 2026-08-14, ADR-021):** `payment.purge.minPendingAgeHours` (padrão `24`) — idade mínima de um Pagamento `PENDING` para ser considerado candidato ao expurgo de órfãos (`POST /internal/purge`), salvaguarda anti-corrida com a criação da Cobrança. Refletido em `GET /props` (`limits`). Alterar aqui muda quais candidatos a próxima execução do expurgo avalia; nunca dispara expurgo por si só (o disparo é do `scheduler-service`).
 
 O efeito de cada alteração é sinalizado como **imediato** (ex.: timeout de chamada outbound) × **exige reinicialização** (ex.: porta HTTP, provedor ativo). Nunca informar "aplicado" sem confirmação real de aplicação pelo serviço.
 

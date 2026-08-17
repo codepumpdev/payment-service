@@ -68,7 +68,7 @@ O serviço **não** é responsável por: criar pedidos, criar cobranças, contro
      └─────────────────────┘
 ```
 
-Serviço inteiramente síncrono (API REST sobre PostgreSQL) — ~~sem mensageria nesta versão~~ **sem mensageria de negócio** nesta versão, mesmo perfil já adotado por `billing-service`: a comunicação com `Billing Service`/`Person Service`/`Notification Service`/provedor é HTTP direto. Ver `arquitetura/13-architecture.md` e ADR-010 (desvio deliberado do padrão organizacional de mensageria, mesma justificativa e mesmo padrão já registrado por `billing-service`, seção 2 de `padrao-desenvolvimento.md`). **Atualização (2026-08-14):** RabbitMQ passa a ser usado **exclusivamente para publicar auditoria** no `audit-service` (`audit.events`, `padrao-desenvolvimento.md` seção 17) — a comunicação de negócio permanece HTTP síncrona; ver ADR-010 (emendada).
+Serviço inteiramente síncrono (API REST sobre PostgreSQL) — **sem mensageria de negócio** nesta versão, mesmo perfil já adotado por `billing-service`: a comunicação com `Billing Service`/`Person Service`/`Notification Service`/provedor é HTTP direto. Ver `arquitetura/13-architecture.md` e ADR-010 (desvio deliberado do padrão organizacional de mensageria, mesma justificativa e mesmo padrão já registrado por `billing-service`, seção 2 de `padrao-desenvolvimento.md`). RabbitMQ é usado **exclusivamente para publicar auditoria** no `audit-service` (`audit.events`, `padrao-desenvolvimento.md` seção 17) — a comunicação de negócio permanece HTTP síncrona; ver ADR-010.
 
 ## 4. Comunicação com sistemas consumidores
 
@@ -133,7 +133,7 @@ Migração de schema golang-migrate — ADR-003
 JWT                golang-jwt/v5, emitido e validado via auth-service — ADR-001
 Segredos           OpenBao (Secrets Manager centralizado) — ADR-008
 Logs               /apps/logs/[namespace]/payment-service/, JSON estruturado — ADR-009
-Integrações        HTTP síncrono (Billing Service, Person Service, Notification Service, Provedor) — ADR-010; RabbitMQ só para auditoria (audit.events) — seção 17, desde 2026-08-14
+Integrações        HTTP síncrono (Billing Service, Person Service, Notification Service, Provedor) — ADR-010; RabbitMQ só para auditoria (audit.events) — seção 17
 Auditoria          audit-service via RabbitMQ (audit.events, AuditEvent da codepump-lib) — padrão, seções 17/18
 Infraestrutura     PostgreSQL em instância única no MVP — ADR-007/15-infrastructure.md
 Lib compartilhada  codepump-lib — funcionalidades técnicas padronizadas (padrão, seção 18)

@@ -23,6 +23,8 @@
 | `application` | `VARCHAR(100)` NOT NULL | Aplicação chamadora que criou o Payment — usada no escopo de `idempotency_key` |
 | `created_at` | `TIMESTAMPTZ` NOT NULL DEFAULT `now()` | — |
 | `updated_at` | `TIMESTAMPTZ` NOT NULL DEFAULT `now()` | Atualizado a cada transição de status |
+| `owner_user_id` | `UUID` NULL | Titular do Payment (ADR-022/BD-21) — referência **opaca** ao usuário do `auth-service` (o **`sub` do `USER JWT`** recebido no header `X-User`, seção 9.4; padrão §8.2, sem FK cruzando serviços). Usado para **contar registros por usuário** (limite de plano) e **escopar a retenção** por usuário (upgrade). **Não** é dado financeiro de destino (BD-16 preservada — nenhum CPF/chave Pix/conta é gravado; só o identificador de escopo de plano). `NULL` para Payments criados fora de contexto de usuário (sistema-a-sistema, só `SERVICE JWT`, ex.: `PAY` disparado por `Billing Service`), que ficam fora de recurso/limite/retenção. Índice `payments(owner_user_id)` para a contagem |
+| `purge_at` | `TIMESTAMPTZ` NULL | Data de expurgo da retenção temporária do plano `FREE` (ADR-022/BD-21; seção 26.6 do padrão). `purge_at = created_at + retentionDays` na criação sob titular `FREE`; `NULL` quando não há retenção (`PRO`/`MAX`, ou sem titular). Fica **somente** nesta entidade raiz `payments` — `payment_status_history`/`payment_provider_events` não têm `purge_at`; são removidos junto com o Payment pelo `POST /internal/purge` (ADR-022). Índice parcial `payments(purge_at) WHERE purge_at IS NOT NULL` para o expurgo. *(No MVP fica inerte: `FREE` não permite o recurso `PAYMENT`, logo nenhum Payment `FREE` é criado — ADR-022.)* |
 
 ```sql
 CREATE UNIQUE INDEX payments_idempotency_key_per_application
@@ -127,6 +129,7 @@ Nenhuma tabela tem FK para fora deste banco — `billing_id` é referência opac
   000002_create_payment_status_history
   000003_create_payment_provider_events
   000004_create_audit_logs
+  000005_add_owner_user_id_and_purge_at_to_payments   -- ADR-022/BD-21: colunas + índices payments(owner_user_id) e payments(purge_at) WHERE purge_at IS NOT NULL
   ```
 * Se múltiplos meios de pagamento além de `PIX` forem suportados no futuro (BD-06, Evolução), `method` deixa de ter `CHECK` fixo em `'PIX'` — mudança aditiva simples.
 * Se múltiplas moedas forem suportadas no futuro (BD-05, Evolução), `currency` deixa de ter `CHECK` fixo em `'BRL'` — mudança aditiva simples.

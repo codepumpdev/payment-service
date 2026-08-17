@@ -48,30 +48,6 @@ Verifica **somente** se o próprio processo Go está de pé — nunca consulta P
 Verifica apenas as dependências que **este serviço especificamente** precisa para operar — nunca dependências de outro serviço que não afetam este, e nunca `/ready` de outro serviço (só `/health` dele, para evitar dependência circular).
 
 **Response — 200 OK** (toda dependência obrigatória disponível):
-~~```json
-{
-  "status": "READY",
-  "checks": {
-    "database": "UP",
-    "auth-service": "UP"
-  }
-}
-```~~
-
-**Response — 503 Service Unavailable** (`status: "NOT_READY"`, cada dependência indisponível marcada `"DOWN"`):
-~~```json
-{
-  "status": "NOT_READY",
-  "checks": {
-    "database": "DOWN",
-    "auth-service": "UP"
-  }
-}
-```~~
-
-**Atualização (2026-08-13):** o formato `checks` (valor string) é substituído pelo formato abaixo, que complementa cada verificação com `responseTime` (ms, sem unidade) — permite identificar degradação de desempenho, não só indisponibilidade (`padrao-desenvolvimento.md`, seção 12.3).
-
-**Response — 200 OK** (toda dependência obrigatória disponível):
 ```json
 {
   "status": "READY",
@@ -153,7 +129,7 @@ O `responseTime` de cada dependência (e o do nível raiz) é o dado de entrada 
 
 ## Hotspot H04 — `Billing Service` (e, com restrição ainda maior, `Person Service`) são dependências obrigatórias do `/ready` de `payment-service`?
 
-*(Novo — não resolvido por nenhuma decisão anterior; a regra organizacional, seção 12.3, não distingue explicitamente "dependência bloqueante para todo o serviço" de "dependência bloqueante só para um subconjunto de endpoints", mesma lacuna já identificada por `person-service`, Hotspot H05 daquele serviço.)* Esta ADR decide, com a justificativa acima, **não** incluir `Billing Service` nem `Person Service` no `/ready` — mas essa é uma interpretação desta equipe da regra organizacional, não uma resposta explícita dela. Diferente do caso de `Notification Service`/OpenBao (chamadas/leituras estruturalmente não-bloqueantes ou restritas ao startup), aqui a dependência é usada em tempo de requisição, de forma síncrona e bloqueante (BD-11, BD-16), só que restrita a um único endpoint (`Billing Service`) ou a um subtipo de um único endpoint (`Person Service`, só `PAY`), em vez de afetar o serviço inteiro. Fica registrado como Hotspot para eventual alinhamento entre serviços da organização (o mesmo padrão de interpretação já usado por `person-service`, H05, é reaproveitado aqui, mas cada novo caso análogo continua exigindo registro próprio até que a organização decida formalizar um critério único na seção 12.3) e para revisão caso o padrão de uso de `Billing Service`/`Person Service` por este serviço se amplie (ver Critérios para reavaliar). Não bloqueia a Implementação (etapa 9) — o comportamento de erro do próprio endpoint de criação (`404`/`409`/`422`, `17-api-contracts.md` seção 1) já cobre a indisponibilidade dessas dependências no momento do uso, independentemente da resposta de `/ready`.
+Nenhuma decisão anterior resolve este ponto: a regra organizacional, seção 12.3, não distingue explicitamente "dependência bloqueante para todo o serviço" de "dependência bloqueante só para um subconjunto de endpoints", mesma lacuna já identificada por `person-service`, Hotspot H05 daquele serviço. Esta ADR decide, com a justificativa acima, **não** incluir `Billing Service` nem `Person Service` no `/ready` — mas essa é uma interpretação desta equipe da regra organizacional, não uma resposta explícita dela. Diferente do caso de `Notification Service`/OpenBao (chamadas/leituras estruturalmente não-bloqueantes ou restritas ao startup), aqui a dependência é usada em tempo de requisição, de forma síncrona e bloqueante (BD-11, BD-16), só que restrita a um único endpoint (`Billing Service`) ou a um subtipo de um único endpoint (`Person Service`, só `PAY`), em vez de afetar o serviço inteiro. Fica registrado como Hotspot para eventual alinhamento entre serviços da organização (o mesmo padrão de interpretação já usado por `person-service`, H05, é reaproveitado aqui, mas cada novo caso análogo continua exigindo registro próprio até que a organização decida formalizar um critério único na seção 12.3) e para revisão caso o padrão de uso de `Billing Service`/`Person Service` por este serviço se amplie (ver Critérios para reavaliar). Não bloqueia a Implementação (etapa 9) — o comportamento de erro do próprio endpoint de criação (`404`/`409`/`422`, `17-api-contracts.md` seção 1) já cobre a indisponibilidade dessas dependências no momento do uso, independentemente da resposta de `/ready`.
 
 ## Nota de integração
 

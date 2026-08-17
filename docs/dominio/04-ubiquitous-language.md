@@ -133,3 +133,28 @@ JWT emitido por `auth-service` (`POST /oauth2/v1/token/service`) para chamadas d
 ## Webhook
 
 Notificação assíncrona enviada pelo `Payment Provider` a este serviço (`POST /v1/payments/webhooks/{provider}`), informando o resultado de uma operação em processamento. Sujeito a validação de autenticidade (Hotspot H02) e a idempotência por `providerEventId` (BD-10).
+
+---
+
+## Operação em nome de usuário (dois tokens)
+
+Uma operação **em nome de** um usuário sobre o `payment-service` (aplicação alvo) usa **dois tokens** na mesma requisição (`padrao-desenvolvimento.md` seção 9.4): `Authorization: Bearer <SERVICE_JWT>` (a **aplicação chamadora**, identidade autorizada) + `X-User: <USER_JWT>` (o **usuário**, contexto). O `USER JWT` é **específico de uma aplicação** (um único `profile`): o `plan` aplicável vem **direto** de `profile.plan` e `profile.app` diz a aplicação do contexto (confiável, assinado); não há header `X-User-App` nem o erro `403 CONTEXTO_APLICACAO_INVALIDO`. O `sub` do usuário vem do **`USER JWT`** (`X-User`) — base para aplicar limite/retenção. Distinta da operação **sistema-a-sistema** (só `SERVICE JWT`, sem `X-User`). No encadeamento, o `X-User` é fixo; só o `Authorization` muda por salto (seção 9.3/9.4/26.2).
+
+---
+
+## Recurso Externo (`PAYMENT`)
+
+Capacidade **gated por plano** (seção 26.10 do padrão) — o `payment-service` é o exemplo da spec. `PAYMENT` é o recurso externo que representa **executar uma movimentação financeira**: `FREE → PAYMENT = não permitido`; `PRO`/`MAX → PAYMENT = permitido`, configurável. Ao receber uma operação de pagamento **em nome de um usuário** (`X-User` + `SERVICE JWT`, seção 9.4), o serviço **valida o recurso `PAYMENT` contra o plano — lido direto de `profile.plan` do único `profile` do `USER JWT` (`X-User`) — antes de qualquer efeito**; usuário `FREE` → `403 RECURSO_NAO_PERMITIDO_NO_PLANO`. É a **regra comercial central** deste serviço como aplicação alvo (ADR-022/BD-21).
+
+---
+
+## Plano / Titular / Retenção (ADR-022)
+
+| Termo | Definição |
+|---|---|
+| **Plano** | Estado comercial do usuário (`FREE`/`PRO`/`MAX`, enum `Plan` da `codepump-lib`), lido **direto** de **`profile.plan`** do único `profile` do **`USER JWT`** (`X-User`; o token é específico de uma aplicação — `profile.app` diz o contexto; seção 9.3/26.2). `FREE` não permite o recurso `PAYMENT`, limita registros e aplica retenção; `PRO`/`MAX` permitem `PAYMENT` sem limite; `MAX` = `PRO` no MVP |
+| **Titular** (`owner_user_id`) | Usuário dono do Payment — o **`sub` do `USER JWT`** (`X-User`), referência **opaca** ao `auth-service`. Base da contagem de limite e do escopo de retenção por usuário. **Não** é dado financeiro de destino (BD-16 preservada) |
+| **Limite de registros** (`payment.maxRecords`) | Quantidade máxima de Payments por titular `FREE`; configurável (assumido `20`\*); excedente → `403 LIMITE_PLANO_ATINGIDO`. Secundário ao gating de recurso |
+| **Período de Retenção** (`retentionDays`) | Dias de retenção temporária no plano `FREE`; configurável (assumido `30`\*) |
+| **`purgeAt`** (`payments.purge_at`) | Data de expurgo da retenção `FREE` (`created_at + retentionDays`); só na entidade raiz `payments`; `NULL` quando não há retenção |
+| **Expurgo** | Remoção física dos Payments com `purge_at <= now()` e seus relacionados, **dentro** do `POST /internal/purge` (segundo motivo, além do órfão-`PENDING` de ADR-021), disparado pelo `scheduler-service` |

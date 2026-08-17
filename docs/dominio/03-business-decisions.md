@@ -1,6 +1,6 @@
 # Decisões de Negócio — Payment Service
 
-> Numeradas sequencialmente (`BD-01`, `BD-02`, ...), nunca renumeradas/reutilizadas. Correções seguem o padrão de riscado + nota datada (`padrao-desenvolvimento.md`, seção 1). Mesmo formato de `billing-service`/`person-service`/`storage-service`.
+> Numeradas sequencialmente (`BD-01`, `BD-02`, ...), nunca renumeradas/reutilizadas. Correções consolidam a decisão para o estado vigente, sem riscados nem notas datadas — a rastreabilidade histórica fica no `roadmap.md` (`padrao-desenvolvimento.md`, seção 1). Mesmo formato de `billing-service`/`person-service`/`storage-service`.
 
 ---
 
@@ -210,9 +210,9 @@
 
 **Contexto:** `padrao-desenvolvimento.md` (seção 2) fixa RabbitMQ como ponto de partida padrão sempre que um novo serviço precisar desacoplar produtor e consumidor de forma assíncrona. O documento funcional deste serviço não pede explicitamente HTTP síncrono (diferente de `billing-service`, que tinha uma instrução textual direta nesse sentido) — mas toda a descrição de fluxo (seções 13, 14, 18, 26) descreve chamadas diretas request/response entre `Payment Service` e `Billing Service`/`Person Service`/`Notification Service`, sem nenhuma menção a fila.
 
-**Decisão:** `Payment Service` se comunica com `Billing Service`, `Person Service`, `Notification Service` e `Payment Provider` via chamada HTTP síncrona nesta versão — ~~nenhum RabbitMQ, nenhuma fila, nenhum broker~~. Todos os seis eventos de domínio do catálogo inicial (`PAYMENT_CREATED`, `PAYMENT_PROCESSING`, `PAYMENT_APPROVED`, `PAYMENT_REJECTED`, `PAYMENT_CANCELLED`, `PAYMENT_REFUNDED`) são modelados como eventos de domínio (para fins de nomenclatura/documentação, `18-event-contracts.md`), mas transportados via HTTP direto, não via mensageria — mesma decisão de `billing-service`.
+**Decisão:** `Payment Service` se comunica com `Billing Service`, `Person Service`, `Notification Service` e `Payment Provider` via chamada HTTP síncrona nesta versão — nenhuma fila para a comunicação de negócio. Todos os seis eventos de domínio do catálogo inicial (`PAYMENT_CREATED`, `PAYMENT_PROCESSING`, `PAYMENT_APPROVED`, `PAYMENT_REJECTED`, `PAYMENT_CANCELLED`, `PAYMENT_REFUNDED`) são modelados como eventos de domínio (para fins de nomenclatura/documentação, `18-event-contracts.md`), mas transportados via HTTP direto, não via mensageria — mesma decisão de `billing-service`.
 
-**Atualização (2026-08-14):** este serviço passa a publicar auditoria no exchange `audit.events` via RabbitMQ (uso exclusivo para auditoria), conforme `padrao-desenvolvimento.md` seção 17 e o `AuditEvent` canônico da `codepump-lib` (seção 17.3/18) — mesmo padrão de `organization-service` (ADR-011) e `alert-service` (ADR-010). Publicação best-effort, nunca bloqueia a operação de negócio. O desvio desta BD permanece válido **para a comunicação de negócio** (`Billing Service`/`Person Service`/`Notification Service`/`Payment Provider` seguem em HTTP síncrono, sem fila); apenas deixa de ser verdade que o serviço não tem broker algum — RabbitMQ passa a existir **exclusivamente para auditoria** (publicador, nunca consumidor). Ver BD-18 (emendada), ADR-010 (emendada), `contratos/18-event-contracts.md` e `arquitetura/15-infrastructure.md`.
+Este serviço publica auditoria no exchange `audit.events` via RabbitMQ (uso exclusivo para auditoria), conforme `padrao-desenvolvimento.md` seção 17 e o `AuditEvent` canônico da `codepump-lib` (seção 17.3/18) — mesmo padrão de `organization-service` (ADR-011) e `alert-service` (ADR-010). Publicação best-effort, nunca bloqueia a operação de negócio. O desvio desta BD permanece válido **para a comunicação de negócio** (`Billing Service`/`Person Service`/`Notification Service`/`Payment Provider` seguem em HTTP síncrono, sem fila); RabbitMQ existe **exclusivamente para auditoria** (publicador, nunca consumidor). Ver BD-18, ADR-010, `contratos/18-event-contracts.md` e `arquitetura/15-infrastructure.md`.
 
 **Impacto:** `arquitetura/13-architecture.md`; `arquitetura/15-infrastructure.md`; `contratos/18-event-contracts.md`; `requisitos/11-non-functional-requirements.md` (RNF, tensão registrada).
 
@@ -266,7 +266,7 @@
 - Positivas: cada serviço evolui seu próprio schema livremente, sem quebrar outro serviço.
 - Negativas: nenhuma — é o modelo já adotado por toda a organização.
 
-**Atualização (2026-08-13):** `padrao-desenvolvimento.md` (seção 8.2) formalizou este princípio como padrão organizacional obrigatório para todos os serviços, citando `payment-service` nominalmente — ver **ADR-018** para o detalhamento completo (banco lógico `payment`, exclusivo, compartilhamento só na camada física). Esta BD permanece válida como registro da decisão de negócio original; ADR-018 é a fonte arquitetural formal a partir de agora. Na mesma data, o padrão de Health Check/Readiness Check/Identificação de Build (seção 12) foi adotado por este serviço — ver **ADR-019** (nenhuma BD prévia sobre o assunto a emendar).
+`padrao-desenvolvimento.md` (seção 8.2) formaliza este princípio como padrão organizacional obrigatório para todos os serviços, citando `payment-service` nominalmente — ver **ADR-018** para o detalhamento completo (banco lógico `payment`, exclusivo, compartilhamento só na camada física). Esta BD permanece válida como registro da decisão de negócio; ADR-018 é a fonte arquitetural formal. O padrão de Health Check/Readiness Check/Identificação de Build (seção 12) também é adotado por este serviço — ver **ADR-019** (nenhuma BD prévia sobre o assunto a emendar).
 
 ---
 
@@ -276,9 +276,9 @@
 
 **Decisão:** toda operação financeira relevante (`PAYMENT_CREATED`, `PAYMENT_APPROVED`, `PAYMENT_REJECTED`, `PAYMENT_CANCELLED`, `PAYMENT_REFUNDED`, `PAYMENT_PARTIALLY_REFUNDED`) gera um registro de auditoria com `paymentId`, `billingId`, `operation`, `application`, `actor`, `createdAt` — nunca dado financeiro sensível (chave Pix, conta bancária, CVV). Histórico de auditoria nunca é alterado depois de criado.
 
-*(Nota de 2026-08-13, verificação: `PAYMENT_PARTIALLY_REFUNDED` foi adicionado a este catálogo — a máquina de estados de BD-07/BD-08 já permite `APPROVED → PARTIALLY_REFUNDED` de forma reativa, e sem essa operação no catálogo, RF-09 não teria como registrar auditoria para essa transição.)*
+`PAYMENT_PARTIALLY_REFUNDED` consta deste catálogo porque a máquina de estados de BD-07/BD-08 permite `APPROVED → PARTIALLY_REFUNDED` de forma reativa; sem essa operação no catálogo, RF-09 não teria como registrar auditoria para essa transição.
 
-**Atualização (2026-08-14):** o catálogo fechado de operações auditadas permanece o mesmo; muda apenas o destino — além de qualquer registro local, cada operação financeira passa a ser projetada em um `AuditEvent` canônico da `codepump-lib` e **publicada no `audit-service` via RabbitMQ** (`audit.events`, uso exclusivo para auditoria, `padrao-desenvolvimento.md` seção 17), como publicador, nunca consumidor — mesmo padrão de `organization-service` (ADR-011) e `alert-service` (ADR-010). Publicação best-effort, nunca bloqueia a operação de negócio; operações que falham também são auditadas (`success: false`). Mapeamento para `action`/`resource` (`PAYMENT`/`REFUND`/`APPROVE`/`REJECT`/`CANCEL`/`CREATE` sobre `resource: PAYMENT`) em `contratos/18-event-contracts.md`. Ver BD-14 (emendada).
+Cada operação financeira do catálogo fechado é projetada em um `AuditEvent` canônico da `codepump-lib` e **publicada no `audit-service` via RabbitMQ** (`audit.events`, uso exclusivo para auditoria, `padrao-desenvolvimento.md` seção 17), como publicador, nunca consumidor — mesmo padrão de `organization-service` (ADR-011) e `alert-service` (ADR-010). Publicação best-effort, nunca bloqueia a operação de negócio; operações que falham também são auditadas (`success: false`). Mapeamento para `action`/`resource` (`PAYMENT`/`REFUND`/`APPROVE`/`REJECT`/`CANCEL`/`CREATE` sobre `resource: PAYMENT`) em `contratos/18-event-contracts.md`. Ver BD-14.
 
 **Impacto:** `19-data-model.md` (`audit_logs`); `contratos/18-event-contracts.md`.
 
@@ -299,3 +299,48 @@
 **Consequências:**
 - Positivas: diagnóstico de incidente entre serviços deixa de depender de correlacionar timestamps manualmente.
 - Negativas: nenhuma.
+
+---
+
+## BD-20 — Expurgo de Pagamentos `PENDING` Órfãos (`POST /internal/purge`)
+
+**Origem:** ADR-021 (2026-08-14); padrão organizacional `POST /internal/purge` (`padrao-desenvolvimento.md`, seção 5).
+
+**Decisão:** Pagamentos `PENDING` cuja Cobrança associada (`billingId`) não existe mais em `billing-service` são **removidos fisicamente** (`DELETE`) por uma operação interna `POST /internal/purge`, disparada periodicamente pelo `scheduler-service` (perfil `SCHEDULER`, fora de `/v1`, não exposta pelo Nginx). Elegibilidade: `status = PENDING` **e** Cobrança `billingId` **confirmada inexistente via M2M** ao `billing-service` **e** `createdAt < (agora − minPendingAge)` (salvaguarda anti-corrida, padrão assumido\* 24h, configurável `payment.purge.minPendingAgeHours`).
+
+**Fail-safe:** se o `billing-service` estiver indisponível ou responder de forma inconclusiva, o Pagamento **não** é expurgado nesta execução — nunca se apaga sem confirmação positiva de que a fatura não existe; a próxima execução tenta de novo (idempotente). Nenhum outro status é elegível (`APPROVED`/`REJECTED`/`CANCELLED`/`REFUNDED` são consolidados, nunca expurgados). A operação é **idempotente** e **destrutiva** — registrada em auditoria (`operation = PAYMENT_PURGE`, sem dado financeiro); **nunca** remove registros de auditoria.
+
+Esta é a **exceção explícita à ADR-006** (Pagamento imutável, sem remoção via API): a ADR-006 rege a API de negócio; o expurgo por retenção é manutenção interna disparada por máquina, prevista na seção 5 do padrão. É a primeira remoção física de Pagamento do serviço, restrita a `PENDING` órfão. Nunca toca em dado financeiro sensível — este serviço não o armazena.
+
+**Impacto:** `arquitetura/decisoes/ADR-021-expurgo-pagamentos-pendentes-orfaos.md`; `requisitos/10-functional-requirements.md` (RF-10); `dominio/08-aggregates.md`, `dominio/09-domain-state-machines.md`, `dominio/06-context-map.md` (consulta M2M ao `billing-service`); `contratos/17-api-contracts.md` (seção 9 + Resumo de Rotas); `arquitetura/decisoes/ADR-020-interface-web-configuracao.md` (`payment.purge.minPendingAgeHours`); `scheduler-service` (nova Scheduled Task `payment-orphan-purge`).
+
+**Consequências:**
+- Positivas: pagamentos `PENDING` órfãos deixam de acumular sem resolução; fecha o ciclo com o expurgo de faturas do `billing-service` (uma fatura expurgada lá torna seu pagamento `PENDING` elegível aqui), sem acoplamento síncrono entre os dois expurgos.
+- Negativas: depende da disponibilidade do `billing-service` para efetivar (por design, fail-safe); `minPendingAge` é assumido\* (Hotspot), a reavaliar conforme a janela real de coordenação `billing`↔`payment`.
+
+O `POST /internal/purge` tem **dois** motivos de expurgo: (a) órfão-`PENDING` (esta BD) e (b) retenção `FREE` por `payments.purge_at <= now()` (BD-21, seção 26.8 do padrão). O critério (b) é **temporal** (não relacional) e **não** consulta o `billing-service`. Ambos coexistem no mesmo endpoint/execução — ver BD-21 e ADR-022.
+
+---
+
+## BD-21 — Planos, Recurso Externo `PAYMENT`, Retenção e Upgrade (Aplicação Alvo)
+
+**Origem:** ADR-022 (2026-08-15); `padrao-desenvolvimento.md` seção 26 (o `payment-service`/`PAYMENT` é o **exemplo** da seção 26.10); `auth-service` ADR-026/BD-26.
+
+**Decisão:** o `payment-service` é **aplicação alvo** — recebe operações **em nome de** um usuário no modelo de **dois tokens** (seção 9.4 — `SERVICE JWT` no `Authorization` + `USER JWT` no `X-User`) e aplica o **plano** do usuário (`FREE`/`PRO`/`MAX`; `MAX` = `PRO` no MVP) **lido direto de `profile.plan`** do único `profile` do `USER JWT` — o token é específico de uma aplicação (`profile.app` diz o contexto; seção 9.3/26.2). Regras:
+
+- **Recurso externo `PAYMENT` (regra central):** configura-se `FREE → PAYMENT = não permitido`; `PRO`/`MAX → PAYMENT = permitido`. Ao receber uma operação de executar pagamento **em nome de um usuário** (`POST /v1/payments` com `X-User` + `SERVICE JWT`, seção 9.4), **valida o recurso `PAYMENT` contra o plano — lido direto de `profile.plan` do único `profile` do `USER JWT` — ANTES de qualquer efeito** (antes de cobrança/recebedor/provedor); `FREE` → `403 RECURSO_NAO_PERMITIDO_NO_PLANO`, nenhum Payment criado. Prioritário sobre o limite de registros.
+- **Limite de registros:** `FREE` limita o **titular** (`payments.owner_user_id`, do **`sub` do `USER JWT`**) a `payment.maxRecords` Payments (configurável, valor assumido inicial `20`\*); contagem exclui os já expurgados; excedente → `403 LIMITE_PLANO_ATINGIDO`. `PRO`/`MAX` sem limite. Secundário ao gating de recurso (no MVP, `FREE` já é barrado pelo recurso).
+- **Retenção temporária:** para titular `FREE`, `payments.purge_at = created_at + retentionDays` (configurável, assumido inicial `30`\*) na criação; só na entidade raiz `payments`; `NULL` para `PRO`/`MAX` ou sem titular. No MVP fica inerte (nenhum Payment `FREE` é criado, pois `PAYMENT` não é permitido) — definida desde já conforme a spec.
+- **Upgrade** (`FREE→PRO`/`MAX`) via `POST /internal/users/{userId}/plan`: zera `purge_at` dos Payments do titular. **Downgrade** não atribui `purge_at` a registros existentes (MVP).
+- **Expurgo:** o `POST /internal/purge` **existente** (ADR-021/BD-20) é **estendido** — passa a expurgar também os `payments` com `purge_at <= now()` e seus relacionados (`payment_status_history`, `payment_provider_events`), além dos órfãos-`PENDING`. **Nunca** um endpoint separado (seção 26.8). **Emenda ao ADR-006**.
+- **Configuração/consulta:** valores configuráveis via `/config/plans` (ADR-020, `ADMIN`); `GET /plans` expõe planos/limites/retenção **e os recursos externos por plano** (`externalResources`).
+- **Encadeamento:** se o `payment-service` precisar chamar outra aplicação alvo na mesma operação (mesmo contexto comercial), mantém o `X-User` **fixo** (o mesmo `USER JWT`, com seu único `profile`) e troca só o `Authorization` para o **seu próprio `SERVICE JWT`** (seção 9.4).
+- **Fronteira:** o `payment-service` **aplica** recurso/limite/retenção/expurgo; o `auth-service` só **fornece** o contexto confiável (usuário/plano) — nunca aplica essas regras (seção 26.11).
+
+**Titular vs. BD-16:** `payments.owner_user_id` guarda o **usuário** em nome de quem a operação corre (o **`sub` do `USER JWT`**, referência opaca de escopo de plano), **não** dado financeiro de destino — BD-16 (não replicar CPF/chave Pix/conta) permanece válida. É, ainda assim, a primeira identidade de usuário persistida por este serviço; mantida mínima (só o `sub` do `USER JWT`). Anotado como Hotspot em ADR-022.
+
+**Impacto:** `arquitetura/decisoes/ADR-022-planos-retencao-upgrade.md`; `modelo-dados/19-data-model.md` (`payments.owner_user_id`/`purge_at`); `contratos/17-api-contracts.md` (nova seção 10 + gating na seção 1 + seção 9 estendida); `arquitetura/decisoes/ADR-006-payment-imutavel-sem-remocao.md` (emenda); `arquitetura/decisoes/ADR-021-expurgo-pagamentos-pendentes-orfaos.md` (segundo motivo de expurgo); `requisitos/10-functional-requirements.md` (RF-11) + `12-acceptance-criteria.md`.
+
+**Consequências:**
+- Positivas: regra comercial central (`FREE` não paga) aplicada no serviço dono da execução; gating antes de qualquer efeito colateral; expurgo reaproveita `/internal/purge` + `scheduler-service`.
+- Negativas: introduz remoção física ampliada (emenda ao ADR-006) e a noção de "titular" (`owner_user_id`); limite/retenção ficam inertes no MVP (gating barra `FREE` antes); valores `20`\*/`30`\* são exemplos configuráveis.

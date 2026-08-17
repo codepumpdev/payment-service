@@ -11,6 +11,19 @@
 * Ponto único de falha (SPOF) aceito deliberadamente no MVP.
 * **Banco de dados lógico exclusivo: `payment`** (`CREATE DATABASE payment`, ADR-018) — adoção do padrão organizacional (`padrao-desenvolvimento.md`, seção 8.2). Nenhum outro serviço da organização acessa este banco, direta ou indiretamente (nem tabela, nem schema, nem view). A instância física PostgreSQL pode ser compartilhada com o banco lógico de outro serviço por economia de infraestrutura no MVP (acima) — o banco lógico, nunca.
 
+### Conexões Command e Query (CQRS — seção 15 do padrão)
+
+Este serviço expõe duas conexões nomeadas, configuráveis de forma independente desde a primeira versão:
+
+```properties
+COMMAND_DATABASE_URL=postgresql://postgres:5432/payment
+QUERY_DATABASE_URL=postgresql://postgres:5432/payment
+```
+
+**No MVP as duas apontam para o mesmo banco** — o banco `payment`, exclusivo deste serviço (seção 8.2) — com o mesmo usuário e a mesma senha, lidos de `secret/payment-service/database/command` e `.../query`. A separação é de código, interface e configuração; nunca se cria um segundo banco só para satisfazer o padrão.
+
+Os pools são independentes (`COMMAND_POOL`/`QUERY_POOL`, `MAX_CONNECTIONS` próprio), e o código nunca assume que as duas URLs apontam para o mesmo lugar. Quando houver necessidade real de escala de leitura, separar os bancos passa a ser mudança de configuração e dos dois secrets — sem alteração de código.
+
 ---
 
 ## Gestão de Segredos Operacionais (ADR-008)
@@ -21,9 +34,24 @@ Adoção direta do padrão organizacional — OpenBao como Secrets Manager centr
 * **Credencial M2M própria** (`client_id`/`client_secret`, para obter Token de Serviço ao chamar `Billing Service`/`Person Service`/`Notification Service`) — vai ao OpenBao, mesmo tratamento.
 * **Credencial de integração com o Payment Provider** (chave de API, segredo de assinatura do webhook — Hotspot H01/H02) — vai integralmente ao OpenBao, mesmo tratamento dado a credenciais de provedor externo por `notification-service` (ADR-009 daquele serviço).
 * **Credencial de conexão do RabbitMQ** (para publicar em `audit.events` — adicionada em 2026-08-14, ADR-010/§17) — vai integralmente ao OpenBao, lida na inicialização, mantida em memória durante a execução.
-* Organização por ambiente: `kv/<ambiente>/payment-service/`.
+* Prefixo no OpenBao: `secret/payment-service/` — o isolamento entre ambientes é por servidor (uma instância de OpenBao por ambiente), não por segmento no caminho.
 
 Nenhum segredo emitido por este serviço a terceiros (nenhum `client_secret` próprio distribuído) — a distinção hash-only vs. OpenBao (`padrao-desenvolvimento.md`, seção 8.1) não se aplica aqui; este serviço só **consome** segredos, nunca emite.
+
+### Paths no OpenBao
+
+Paths concretos deste serviço, na convenção da seção 8.1 do padrão. A policy autoriza `read` em cada um, e em nada fora do prefixo `secret/payment-service/`:
+
+| Path | Campos | Observação |
+|---|---|---|
+| `secret/payment-service/database/command` | `payment_owner_user`, `payment_owner_password`, `payment_app_user`, `payment_app_password` | Conexão **Command** (seção 15 do padrão). |
+| `secret/payment-service/database/query` | os mesmos quatro campos | Conexão **Query**. Mesmo banco no MVP, portanto **mesmo usuário e mesma senha** de `database/command`. |
+| `secret/payment-service/m2m` | `client_id`, `client_secret` | Credencial de Aplicação própria, usada para obter Token de Serviço M2M no `auth-service`. |
+| `secret/payment-service/providers/payment` (e `/*`) | definidos pelo fornecedor | **Path autorizado, sem secret criado.** Cada provedor recebe o seu sob demanda — ex.: `secret/payment-service/providers/payment/<fornecedor>`. |
+
+Provisionados por `scripts/openbao/setup-payment-service.cmd`, que é a fonte da verdade destes paths — um secret que já existe é preservado pelo script.
+
+As senhas de banco são geradas pelo script do OpenBao e depois usadas no `scripts/postgres/database.cmd` — o OpenBao é a origem, o banco é o consumidor, nunca o contrário.
 
 ---
 

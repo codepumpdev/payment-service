@@ -1,6 +1,6 @@
 # Requisitos — Critérios de Aceite
 
-> Detalha, em formato Gherkin (Dado/Quando/Então), os critérios de aceite mínimos já registrados em `10-functional-requirements.md` (RF-01 a RF-09) — mesma numeração. Não substitui aquele documento; adiciona os cenários concretos que faltavam para abrir `Planejamento/Histórias` (etapa 8). Mesmo formato de `billing-service`/`person-service`/`storage-service`.
+> Detalha, em formato Gherkin (Dado/Quando/Então), os critérios de aceite mínimos já registrados em `10-functional-requirements.md` (RF-01 a RF-09, mais **RF-11** — Planos/Recurso Externo, adicionado em 2026-08-15; RF-10, expurgo de órfãos, é interno e coberto por ADR-021) — mesma numeração. Não substitui aquele documento; adiciona os cenários concretos que faltavam para abrir `Planejamento/Histórias` (etapa 8). Mesmo formato de `billing-service`/`person-service`/`storage-service`.
 >
 > Onde a documentação registra um comportamento **em aberto** (Hotspots H01, H02, H03 — `../dominio/01-event-storming-big-picture.md`), os cenários abaixo descrevem o comportamento provisório/atual, sem inventar uma resolução definitiva.
 
@@ -29,6 +29,10 @@
 | Tamanho de página — padrão/máximo (consultas) | **`size=20` padrão, `size=100` máximo** | Convenção de mercado, mesmo valor já usado nos demais serviços | `17-api-contracts.md`, Convenções |
 | Formato de data/hora nas respostas | **ISO 8601 com timezone** | Convenção de mercado | `17-api-contracts.md`, Convenções |
 | TTL/expiração de `idempotencyKey` | **sem expiração\*** | Não especificado pelo documento funcional; unicidade tratada como permanente nesta versão | `dominio/07-domain-services.md` (Serviço de Idempotência) |
+| Limite de registros do plano `FREE` (RF-11) | **`payment.maxRecords = 20`\*** | Exemplo/convenção; a spec (seção 26.10) decide só o recurso `PAYMENT`, não o número — configurável via `/config/plans` | `dominio/03-business-decisions.md` (BD-21), ADR-022 |
+| Período de retenção do plano `FREE` (RF-11) | **`retentionDays = 30`\*** | Mesmo valor assumido por `person-service`; configurável | `dominio/03-business-decisions.md` (BD-21), ADR-022 |
+
+> O recurso externo `PAYMENT` **não permitido** no `FREE` (permitido em `PRO`/`MAX`) **não** é assumido — é decidido pela spec (seção 26.10, `payment-service` é o exemplo).
 
 Revisar junto de `11-non-functional-requirements.md` (RNF-10) assim que houver medição real ou decisão explícita do usuário.
 
@@ -226,6 +230,57 @@ Cenário: Criação de payment gera registro de auditoria
 
 ---
 
+## RF-11 — Planos, Recurso Externo `PAYMENT`, Retenção e Upgrade (Aplicação Alvo)
+
+```gherkin
+# Nota (2026-08-15): o USER JWT passou a ser específico de uma aplicação (um único profile);
+# o header X-User-App foi removido e o plano vem direto de profile.plan (seção 9.3/9.4/26.2).
+# Os cenários de seleção por X-User-App e de "X-User-App inválido" (403 CONTEXTO_APLICACAO_INVALIDO)
+# foram removidos — não há mais X-User-App a validar.
+
+Cenário: Usuário FREE tenta executar pagamento em nome de usuário é barrado pelo recurso PAYMENT
+  Dado uma aplicação chamadora operando em nome de um usuário, com Authorization: Bearer <SERVICE_JWT> e X-User: <USER_JWT> válido
+  E o USER JWT (específico de uma aplicação) carrega um único profile com profile.plan "FREE"
+  Quando ela chama POST /v1/payments para executar uma movimentação (type "PAY" ou "RECEIVE")
+  Então o sistema lê o plano direto de profile.plan (FREE)
+  E valida o recurso externo PAYMENT contra o plano FREE antes de qualquer efeito
+  E responde 403 RECURSO_NAO_PERMITIDO_NO_PLANO
+  E nenhum Payment é criado
+  E nenhuma chamada ao Billing Service, ao Person Service ou ao provedor é feita
+
+Cenário: Usuário PRO executa pagamento normalmente
+  Dado um X-User: <USER_JWT> válido cujo único profile carrega profile.plan "PRO", com Authorization: Bearer <SERVICE_JWT> da aplicação chamadora
+  Quando a aplicação chamadora chama POST /v1/payments
+  Então o recurso PAYMENT é permitido e o fluxo normal de criação prossegue (validação de cobrança, recebedor quando PAY, envio ao provedor)
+  E o Payment é criado com owner_user_id igual ao sub do USER JWT (X-User)
+
+Cenário: Limite de registros do plano (regra secundária, plano que permita PAYMENT)
+  Dado um titular cujo plano permite o recurso PAYMENT mas limita payment.maxRecords a 20*
+  E o titular já possui 20 Payments não expurgados
+  Quando um novo POST /v1/payments é feito em nome desse titular
+  Então o sistema responde 403 LIMITE_PLANO_ATINGIDO
+
+Cenário: Upgrade zera purge_at dos Payments do titular
+  Dado um titular FREE com Payments cujo purge_at está preenchido
+  Quando a aplicação de pagamento chama POST /internal/users/{userId}/plan com { "plan": "PRO" }
+  Então o sistema zera o purge_at desses Payments (dados tornam-se permanentes)
+  E responde 200 OK
+
+Cenário: Expurgo de retenção dentro do /internal/purge
+  Dado Payments com purge_at <= agora
+  Quando o scheduler-service chama POST /internal/purge
+  Então esses Payments e seus relacionados (payment_status_history, payment_provider_events) são removidos fisicamente
+  E o resultado é contabilizado em retentionPurged, além dos órfãos-PENDING (ADR-021)
+  E nenhum registro de auditoria é removido
+
+Cenário: GET /plans expõe o recurso externo por plano
+  Quando um cliente chama GET /plans
+  Então a resposta traz, para FREE, externalResources com PAYMENT allowed false
+  E para PRO e MAX, PAYMENT allowed true
+```
+
+---
+
 ## Rastreabilidade
 
 | RF | Fluxo | ES | BD/ADR principais |
@@ -239,6 +294,7 @@ Cenário: Criação de payment gera registro de auditoria
 | RF-07 | 7 | ES-07 | BD-01, BD-14 |
 | RF-08 | 8 | ES-08 | — |
 | RF-09 | 9 | ES-09 | BD-15, BD-18 |
+| RF-11 | — | — | BD-21, ADR-022 (seção 26 do padrão; recurso externo `PAYMENT`) |
 
 ---
 
@@ -252,4 +308,4 @@ Cenário: Criação de payment gera registro de auditoria
 
 ## Evolução
 
-Revisar todos os cenários marcados com Hotspot assim que a respectiva decisão do usuário for registrada — seguindo o mesmo padrão de riscado + nota datada já aplicado em `billing-service`/`person-service`/`storage-service`.
+Revisar todos os cenários marcados com Hotspot assim que a respectiva decisão do usuário for registrada — consolidando o cenário para o estado vigente (`padrao-desenvolvimento.md`, seção 1), como já aplicado em `billing-service`/`person-service`/`storage-service`.

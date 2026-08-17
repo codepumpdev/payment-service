@@ -145,6 +145,47 @@
 
 ---
 
+## RF-10 — Expurgo de Pagamentos `PENDING` Órfãos (Endpoint Interno)
+
+(ADR-021; BD-20)
+
+**Origem:** ADR-021 (expurgo por retenção); padrão organizacional `POST /internal/purge` (`padrao-desenvolvimento.md`, seção 5).
+
+**Descrição:** Remover fisicamente da base os Pagamentos `PENDING` cuja Cobrança associada (`billingId`) não existe mais em `billing-service`, em operação interna disparada periodicamente pelo `scheduler-service` — exceção de retenção à ADR-006 (Pagamento imutável, sem remoção).
+
+**Critérios de aceite:**
+
+* Exposto como `POST /internal/purge` (nome padronizado — seção 5 do padrão), fora do prefixo `/v1`, nunca exposto pelo Nginx (rota `/internal/*`, seção 14.3).
+* Autenticação JWT M2M, perfil `SCHEDULER` (nunca `ADMIN` — seção 9.1); requisições sem esse perfil são rejeitadas.
+* Elegível **somente** o Pagamento com `status = PENDING` **e** cuja Cobrança `billingId` seja **confirmada inexistente** por consulta M2M ao `billing-service` **e** com `createdAt` anterior a `minPendingAge` (padrão assumido\* 24h, configurável `payment.purge.minPendingAgeHours`).
+* **Fail-safe:** se o `billing-service` estiver indisponível/inconclusivo (5xx, timeout), o Pagamento **não** é expurgado nesta execução — nunca se apaga sem confirmação positiva de que a fatura não existe. Os poupados são contabilizados em `billingUnavailableSkipped` na resposta.
+* Nunca expurga `APPROVED`, `REJECTED`, `CANCELLED` ou `REFUNDED` — registros financeiros consolidados, independentemente da fatura.
+* Idempotente — reexecução sem elegíveis retorna `paymentsPurged: 0`; resposta é um resumo (contadores), sem conteúdo de pagamento.
+* A operação (destrutiva) gera registro de auditoria com `operation = PAYMENT_PURGE` (RF-09), sem qualquer dado financeiro; o expurgo **nunca** remove registros de auditoria (que vivem em `audit-service`).
+
+---
+
+## RF-11 — Planos, Recurso Externo `PAYMENT`, Retenção e Upgrade (Aplicação Alvo)
+
+(ADR-022; BD-21)
+
+**Origem:** ADR-022; BD-21; `padrao-desenvolvimento.md` seção 26 (o `payment-service`/`PAYMENT` é o exemplo da seção 26.10); `auth-service` ADR-026. Numerado após RF-10 para não renumerar os requisitos existentes.
+
+**Descrição:** O `payment-service` aplica o **plano** do usuário (lido **direto** de `profile.plan` do único `profile` do **`USER JWT`** recebido no header `X-User`, junto ao `SERVICE JWT` no `Authorization` — dois tokens, seção 9.4) às operações de pagamento — controle do **recurso externo `PAYMENT`**, limite de registros, retenção temporária e expurgo — e expõe os endpoints de plano. O `USER JWT` é específico de uma aplicação (um único `profile`); `profile.app` diz a aplicação do contexto e `profile.plan` é o plano aplicável (seção 9.3/26.2). *(2026-08-15: o header `X-User-App` e a validação `403 CONTEXTO_APLICACAO_INVALIDO` — presentes numa versão anterior deste mesmo dia — foram **removidos**; o plano vem de `profile.plan`.)*
+
+**Critérios de aceite:**
+
+* Ao receber `POST /v1/payments` em contexto de usuário (`X-User` + `SERVICE JWT`, seção 9.4), lê o `plan` **direto** de `profile.plan` do único `profile` do **`USER JWT`** e o `sub` do usuário, e valida o **recurso externo `PAYMENT`** contra a configuração do plano **antes** de qualquer efeito (antes de validar cobrança, obter recebedor ou enviar ao provedor): `FREE` (`PAYMENT` não permitido) → `403 RECURSO_NAO_PERMITIDO_NO_PLANO`, nenhum Payment criado e nenhuma chamada externa feita; `PRO`/`MAX` → prossegue.
+* Após o gating de recurso, para `FREE` aplica o **limite**: rejeita com `403 LIMITE_PLANO_ATINGIDO` quando o titular (`owner_user_id`) já tem `payment.maxRecords` Payments (contagem exclui os expurgados); `PRO`/`MAX` sem limite. Regra secundária ao gating (no MVP, `FREE` já é barrado pelo recurso).
+* Para titular `FREE`, grava `payments.purge_at = created_at + retentionDays` na criação; `PRO`/`MAX` ou sem titular → `purge_at = NULL`. `purge_at` só na entidade raiz `payments`.
+* `POST /internal/users/{userId}/plan` com `FREE→PRO`/`MAX` zera `purge_at` dos Payments do titular; downgrade não atribui `purge_at` a registros existentes.
+* `POST /internal/purge` (disparado pelo `scheduler-service`) passa a expurgar fisicamente, **além** dos órfãos-`PENDING` (RF-10/ADR-021), os `payments` com `purge_at <= now()` e seus relacionados (`payment_status_history`, `payment_provider_events`), na ordem que respeita o `ON DELETE RESTRICT` — **nunca** um endpoint separado (seção 26.8; emenda ao ADR-006).
+* `GET /plans` expõe planos, **recursos externos por plano** (`externalResources`), limites e retenção; `/config/plans` (ADR-020, `ADMIN`) administra os valores — configuráveis, nunca fixos em código.
+* O `payment-service` **aplica** recurso/limite/retenção/expurgo; o `auth-service` só fornece o contexto (usuário/plano) — nunca aplica essas regras (seção 26.11).
+* `owner_user_id` é o usuário em nome de quem a operação corre (o `sub` do `USER JWT`, referência opaca de escopo de plano), **não** dado financeiro de destino — BD-16 permanece válida (nenhum CPF/chave Pix/conta é persistido).
+
+---
+
 ## Fora do mapeamento 1:1
 
 Consulta de histórico de status (`GET /v1/payments/{id}/history`\*, análoga à de `billing-service`) e a consulta de eventos de provedor recebidos (`payment_provider_events`) não correspondem a nenhum dos 9 fluxos numerados (são operações de leitura administrativa, não fluxos de negócio com regra própria) — contratadas diretamente em `../contratos/17-api-contracts.md`, mesmo tratamento já dado por `billing-service`/`person-service`/`storage-service` a "Consultas Administrativas". `POST /v1/payments/{id}/cancel`\* também fica fora do mapeamento 1:1 — endpoint assumido, inferido pela combinação de Perfil `PAYMENT_CANCEL` + evento `PAYMENT_CANCELLED` + transição `PENDING → CANCELLED`, sem fluxo numerado próprio (nota de 2026-08-13, verificação: `17-api-contracts.md` seção 5 citava "RF-06" incorretamente — corrigido, já que RF-06 é "Atualização de Status por Confirmação do Provedor", sem relação com cancelamento). `POST /v1/payments/{id}/refund` também fica fora do mapeamento 1:1 desta versão — não implementado nesta versão (BD-08, Hotspot H03), mas contratado para referência futura.

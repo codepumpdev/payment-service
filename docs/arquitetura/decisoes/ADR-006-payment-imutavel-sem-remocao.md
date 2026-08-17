@@ -20,11 +20,13 @@
 
 ### Negativas
 
-- A tabela `payments` cresce indefinidamente, sem nenhum mecanismo de expurgo nesta versão — aceito, mesmo critério de simplicidade inicial já usado por outros serviços (retenção/expurgo só quando houver necessidade real).
+- A tabela `payments` cresce indefinidamente, salvo os Pagamentos removidos pelo expurgo interno de `PENDING` órfão (ADR-021) e de retenção `FREE` (ADR-022) — nenhum outro mecanismo de remoção existe nesta versão (retenção/expurgo só quando houver necessidade real).
 
 ## Critérios para reavaliar
 
 Se uma exigência legal ou de negócio exigir expurgo de dado financeiro após um período de retenção — definir política própria quando isso ocorrer (mesmo critério já usado por `notification-service`, ADR-013 daquele serviço, para retenção de histórico de entrega).
+
+**Exceção de remoção física (ADR-021, ADR-022):** existe um único caminho de remoção física de Payment, feito **dentro** do `POST /internal/purge` (nunca um endpoint separado, seção 26.8), por dois motivos que coexistem na mesma execução: (a) **órfão-`PENDING`** — Pagamentos `PENDING` cuja Cobrança `billingId` não existe mais em `billing-service`, com verificação M2M fail-safe (ADR-021, BD-20); e (b) **retenção `FREE`** — `payments` com `purge_at <= now()` (ADR-022, BD-21). Nenhum dos dois contradiz esta ADR: a imutabilidade/não-remoção vale integralmente para a API de negócio e para todo pagamento **consolidado** (`APPROVED`/`REJECTED`/`CANCELLED`/`REFUNDED`, nunca expurgados); o expurgo é manutenção interna disparada por máquina (`scheduler-service`, perfil `SCHEDULER`), a exceção de retenção prevista na seção 5 do padrão. No MVP a retenção `FREE` é **inerte** — `FREE` não permite o recurso `PAYMENT`, logo nenhum Payment `FREE` é criado.
 
 ## Nota de integração
 

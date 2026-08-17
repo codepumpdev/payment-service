@@ -1,8 +1,6 @@
 # Contratos de Eventos — Payment Service
 
-> ~~Diferente de `notification-service` (RabbitMQ), este serviço não publica em nenhum broker nesta versão (ADR-010)~~ — os "eventos" abaixo são: (a) eventos de domínio internos, despachados em memória, consumidos pelo módulo de Auditoria (BC-02); e (b) chamadas HTTP síncronas de entrada/saída com sistemas externos, nomeadas com o mesmo vocabulário de evento por clareza de domínio, mas sem nenhum mecanismo de fila por trás.
->
-> **Atualização (2026-08-14):** este serviço passa a publicar auditoria no exchange `audit.events` via RabbitMQ (uso exclusivo para auditoria), conforme `padrao-desenvolvimento.md` seção 17 e o `AuditEvent` canônico da `codepump-lib` (seção 17.3/18) — mesmo padrão de `organization-service` (ADR-011) e `alert-service` (ADR-010). Publicação best-effort, nunca bloqueia a operação de negócio. O despachante em memória de eventos de domínio (BC-02) continua existindo como mecanismo interno; o módulo de Auditoria, ao consumi-lo, passa a **projetar cada operação financeira relevante para um `AuditEvent` e publicá-lo em `audit.events`** (RabbitMQ), em vez de mantê-la apenas localmente. A comunicação de negócio (`Billing Service`/`Person Service`/`Notification Service`/`Payment Provider`) permanece em HTTP síncrono (ADR-010) — RabbitMQ existe **exclusivamente para auditoria**. Ver a seção "Auditoria — Publicação em `audit.events` (RabbitMQ)", abaixo.
+> Este serviço usa RabbitMQ **exclusivamente para auditoria**: o módulo de Auditoria (BC-02) projeta cada operação financeira relevante para um `AuditEvent` canônico da `codepump-lib` e o publica no exchange `audit.events` (`padrao-desenvolvimento.md` seção 17 e seção 17.3/18) — mesmo padrão de `organization-service` (ADR-011) e `alert-service` (ADR-010), como publicador, nunca consumidor. Publicação best-effort, nunca bloqueia a operação de negócio. A comunicação de negócio (`Billing Service`/`Person Service`/`Notification Service`/`Payment Provider`) permanece em HTTP síncrono (ADR-010), sem fila. Os "eventos" abaixo são: (a) eventos de domínio internos, despachados em memória, consumidos pelo módulo de Auditoria (BC-02) — que os projeta para `AuditEvent` e os publica em `audit.events`; e (b) chamadas HTTP síncronas de entrada/saída com sistemas externos, nomeadas com o mesmo vocabulário de evento por clareza de domínio, mas sem nenhum mecanismo de fila por trás. Ver a seção "Auditoria — Publicação em `audit.events` (RabbitMQ)", abaixo.
 
 ---
 
@@ -23,8 +21,6 @@ Nunca inclui dado sensível além do mínimo listado (BD-15, BD-18).
 ---
 
 ## Auditoria — Publicação em `audit.events` (RabbitMQ)
-
-*(Adicionado em 2026-08-14 — adoção do padrão organizacional de Auditoria Centralizada, `padrao-desenvolvimento.md` seção 17.)*
 
 O módulo de Auditoria (BC-02), ao consumir cada evento de domínio interno acima, projeta a operação financeira relevante em um `AuditEvent` canônico da `codepump-lib` (`padrao-desenvolvimento.md`, seções 17.3 e 18) e o **publica no exchange `audit.events`** — este serviço é **publicador, nunca consumidor** desse exchange (o consumo é responsabilidade exclusiva de `audit-service`). RabbitMQ é usado **exclusivamente para auditoria**; nenhuma fila própria de negócio, nenhum outro exchange.
 
@@ -71,7 +67,7 @@ O módulo de Auditoria (BC-02), ao consumir cada evento de domínio interno acim
 |---|---|---|---|
 | `PAYMENT_APPROVED`, `PAYMENT_REJECTED`, `PAYMENT_REFUNDED`, `PAYMENT_PARTIALLY_REFUNDED`\*\* | `Billing Service` | `POST /v1/billings/{id}/payment-events`\* (assumido, contrato já publicado por `billing-service`) | Informa o resultado da movimentação, para os dois sentidos (`RECEIVE`/`PAY`) igualmente — BD-01, ES-07. |
 
-\*\* **Nota de 2026-08-13 (verificação):** o contrato de `billing-service` (`contratos/17-api-contracts.md`, seção 6) documenta hoje `event ∈ {PAYMENT_APPROVED, PAYMENT_REJECTED, PAYMENT_REFUNDED}` — **não inclui `PAYMENT_PARTIALLY_REFUNDED`**. Este serviço pode, na prática, tentar enviar um valor que `billing-service` ainda não aceita. Isso é uma extensão do Hotspot H03 (não um novo Hotspot): a resolução de H03 (se estorno parcial reativo está mesmo em escopo) determina se `billing-service` precisa, primeiro, ampliar aquele `CHECK`/catálogo para aceitar esse evento.
+\*\* **Verificação (Hotspot H03):** o contrato de `billing-service` (`contratos/17-api-contracts.md`, seção 6) documenta `event ∈ {PAYMENT_APPROVED, PAYMENT_REJECTED, PAYMENT_REFUNDED}` — **não inclui `PAYMENT_PARTIALLY_REFUNDED`**. Este serviço pode, na prática, tentar enviar um valor que `billing-service` ainda não aceita. Isso é uma extensão do Hotspot H03 (não um novo Hotspot): a resolução de H03 (se estorno parcial reativo está mesmo em escopo) determina se `billing-service` precisa, primeiro, ampliar aquele `CHECK`/catálogo para aceitar esse evento.
 | `PAYMENT_APPROVED`, `PAYMENT_REJECTED`, `PAYMENT_REFUNDED` | `Notification Service` | Chamada HTTP síncrona, API já documentada daquele serviço | BD-14, seção 27 do documento funcional — `Notification Service` decide os canais; `PAYMENT_PARTIALLY_REFUNDED` não está na lista explícita da seção 27, tratado como não notificado diretamente nesta versão (assumido\*). |
 
 ---
@@ -89,7 +85,7 @@ O módulo de Auditoria (BC-02), ao consumir cada evento de domínio interno acim
 ## Jobs Internos — Não São Eventos de Domínio
 
 * Nenhum job interno periódico existe neste serviço nesta versão — diferente de `billing-service` (verificação de vencimento). Toda transição é reativa (criação ou webhook).
-* **Nota (2026-08-13, ADR-019):** o padrão organizacional de Tarefas Agendadas via `scheduler-service` (`padrao-desenvolvimento.md`, seção 13) foi adotado por toda a organização nesta data. Como este serviço nunca teve nenhum job periódico interno, ele já está em conformidade com esse padrão sem exigir nenhuma migração — nenhuma goroutine/cron a remover, nenhum endpoint `/internal/*` a expor para o `scheduler-service`.
+* **Conformidade com Tarefas Agendadas (ADR-019):** o padrão organizacional de Tarefas Agendadas via `scheduler-service` (`padrao-desenvolvimento.md`, seção 13) aplica-se a toda a organização. Como este serviço nunca teve nenhum job periódico interno, já está em conformidade com esse padrão sem exigir nenhuma migração — nenhuma goroutine/cron a remover, nenhum endpoint `/internal/*` a expor para o `scheduler-service`.
 
 ---
 

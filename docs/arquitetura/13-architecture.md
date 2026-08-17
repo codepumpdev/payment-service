@@ -39,7 +39,7 @@ Sistema Consumidor / Billing Service
 
 **Depende de (síncrono, inbound):** `Payment Provider` chama este serviço (`POST /v1/payments/webhooks/{provider}`) para confirmar o resultado de uma operação em processamento — não é este serviço que consulta o provedor ativamente após o envio inicial (BD-14, Hotspot H01/H02).
 
-**Não depende de (nesta versão):** ~~nenhum Message Broker~~ — desvio deliberado do padrão organizacional (BD-14, ADR-010); nenhum segundo provedor implementado (BD-13, Hotspot H01). **Atualização (2026-08-14):** este serviço passa a usar RabbitMQ **exclusivamente para publicar auditoria** no exchange `audit.events` (`padrao-desenvolvimento.md` seção 17, `AuditEvent` canônico da `codepump-lib`) — publicador, nunca consumidor; nenhuma fila própria de negócio. O desvio de ADR-010 permanece válido para a comunicação de negócio (que segue HTTP síncrono); ver "Auditoria — Publicação em `audit.events`", abaixo, e `contratos/18-event-contracts.md`.
+**Não depende de (nesta versão):** nenhum Message Broker para a comunicação de negócio — desvio deliberado do padrão organizacional (BD-14, ADR-010); nenhum segundo provedor implementado (BD-13, Hotspot H01). Este serviço usa RabbitMQ **exclusivamente para publicar auditoria** no exchange `audit.events` (`padrao-desenvolvimento.md` seção 17, `AuditEvent` canônico da `codepump-lib`) — publicador, nunca consumidor; nenhuma fila própria de negócio. O desvio de ADR-010 permanece válido para a comunicação de negócio (que segue HTTP síncrono); ver "Auditoria — Publicação em `audit.events`", abaixo, e `contratos/18-event-contracts.md`.
 
 **Publica (eventos internos, não cruzam processo):** todos os eventos listados em `05-bounded-contexts.md` — consumidos em processo pelo módulo de Auditoria (BC-02).
 
@@ -51,7 +51,7 @@ Sistema Consumidor / Billing Service
 
 ## Job Interno
 
-Nenhum job interno periódico existe neste serviço nesta versão — diferente de `billing-service` (verificação de vencimento). Toda transição de status é reativa: disparada por uma chamada HTTP de criação ou por um webhook recebido. Não há "verificação de pagamentos pendentes" agendada nesta versão (não pedida pelo documento funcional). **Atualização (2026-08-13):** confirmado, via ADR-019, que este serviço já está em conformidade com o padrão organizacional de Tarefas Agendadas (`padrao-desenvolvimento.md`, seção 13) sem exigir nenhuma migração — não há goroutine/cron interno a remover, nem endpoint `/internal/*` a criar para o `scheduler-service`.
+Nenhum job interno periódico existe neste serviço nesta versão — diferente de `billing-service` (verificação de vencimento). Toda transição de status é reativa: disparada por uma chamada HTTP de criação ou por um webhook recebido. Não há "verificação de pagamentos pendentes" agendada nesta versão (não pedida pelo documento funcional). Este serviço já está em conformidade com o padrão organizacional de Tarefas Agendadas (`padrao-desenvolvimento.md`, seção 13; ADR-019) sem exigir nenhuma migração — não há goroutine/cron interno a remover, nem endpoint `/internal/*` a criar para o `scheduler-service`.
 
 ---
 
@@ -65,7 +65,7 @@ Este serviço não tem nenhum processamento de longa duração a desacoplar: tod
 
 Todos os eventos de domínio nomeados em `dominio/02-event-stories.md`/`05-bounded-contexts.md` são publicados em um **despachante de eventos em memória**, dentro do único processo do Payment API, consumidos em processo pelo módulo de Auditoria (BC-02) — mesma decisão de implantação inicial já registrada por `billing-service`/`person-service`/`storage-service` (`18-event-contracts.md`).
 
-**Atualização (2026-08-14) — Auditoria — Publicação em `audit.events`:** o despachante em memória continua sendo o mecanismo interno, mas o módulo de Auditoria (BC-02), ao consumi-lo, passa a projetar cada operação financeira relevante (BD-18) em um `AuditEvent` canônico da `codepump-lib` e **publicá-lo no exchange `audit.events` via RabbitMQ** (`topic`, durable, routing key `audit.event.published`, Publisher Confirms) — este serviço é publicador, nunca consumidor; RabbitMQ existe exclusivamente para auditoria. Publicação best-effort, nunca bloqueia a operação de negócio (Command comitado / webhook processado antes da tentativa de publicação). Mesmo padrão de `organization-service` (ADR-011) e `alert-service` (ADR-010). Contrato completo em `contratos/18-event-contracts.md`; conexão/credencial em `arquitetura/15-infrastructure.md`.
+**Auditoria — Publicação em `audit.events`:** o despachante em memória continua sendo o mecanismo interno, mas o módulo de Auditoria (BC-02), ao consumi-lo, projeta cada operação financeira relevante (BD-18) em um `AuditEvent` canônico da `codepump-lib` e **publica-o no exchange `audit.events` via RabbitMQ** (`topic`, durable, routing key `audit.event.published`, Publisher Confirms) — este serviço é publicador, nunca consumidor; RabbitMQ existe exclusivamente para auditoria. Publicação best-effort, nunca bloqueia a operação de negócio (Command comitado / webhook processado antes da tentativa de publicação). Mesmo padrão de `organization-service` (ADR-011) e `alert-service` (ADR-010). Contrato completo em `contratos/18-event-contracts.md`; conexão/credencial em `arquitetura/15-infrastructure.md`.
 
 ---
 

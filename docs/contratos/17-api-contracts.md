@@ -1,13 +1,13 @@
 # Contratos de API — Payment Service
 
-> Cobre os fluxos já modelados em `../dominio/02-event-stories.md` (ES-01 a ES-09) e os requisitos funcionais correspondentes (`../requisitos/10-functional-requirements.md`, RF-01 a RF-09). Rotas versionadas com prefixo `/v1` (ADR-005). ~~`GET /health` é exceção deliberada de versionamento.~~ **Atualização (ADR-019, 2026-08-13):** `GET /health` e o novo `GET /ready` (seção 8) seguem, ambos, a mesma exceção de versionamento — convenção organizacional de health-check/readiness-check (`padrao-desenvolvimento.md`, seção 12). Onde o domínio já modelado não fixa um detalhe, este documento resolve de forma simples, marcado com **\*** e listado em "Pontos Abertos".
+> Cobre os fluxos já modelados em `../dominio/02-event-stories.md` (ES-01 a ES-09) e os requisitos funcionais correspondentes (`../requisitos/10-functional-requirements.md`, RF-01 a RF-09). Rotas versionadas com prefixo `/v1` (ADR-005). `GET /health` e `GET /ready` (seção 8) seguem, ambos, a exceção de versionamento — convenção organizacional de health-check/readiness-check (`padrao-desenvolvimento.md`, seção 12; ADR-019). Onde o domínio já modelado não fixa um detalhe, este documento resolve de forma simples, marcado com **\*** e listado em "Pontos Abertos".
 
 ---
 
 ## Convenções
 
 * Todas as rotas exigem HTTPS; corpo em JSON, exceto onde indicado.
-* Erros: ~~`{ "error": { "code": "CODIGO_DO_ERRO", "message": "Descrição legível" } }` (ADR-004) — envelope aninhado, padrão organizacional, sem desvio.~~ **Atualização (2026-08-14):** envelope de erro alinhado ao `ErrorResponse` canônico da `codepump-lib` (`padrao-desenvolvimento.md` seção 4 e 18) — formato plano `timestamp`/`status`/`code`/`message`/`path`?/`correlationId`?/`errors`?[]; identificação pelo `code`, nunca pela `message`:
+* Erros: envelope alinhado ao `ErrorResponse` canônico da `codepump-lib` (ADR-004; `padrao-desenvolvimento.md` seção 4 e 18) — formato plano `timestamp`/`status`/`code`/`message`/`path`?/`correlationId`?/`errors`?[]; identificação pelo `code`, nunca pela `message`:
   ```json
   {
     "timestamp": "2026-08-14T14:30:00Z",
@@ -92,6 +92,20 @@ Todos os campos são obrigatórios (BD-02, BD-03, BD-05, BD-06, BD-09, BD-11).
 | 422 | `RECEBEDOR_SEM_CONTA`\* | `type = PAY` e a Pessoa recebedora não tem conta de recebimento cadastrada (ES-04) |
 | 401 | `NAO_AUTENTICADO` | token ausente/inválido/expirado |
 | 403 | `PERFIL_INSUFICIENTE` | falta `PAYMENT_CREATE` |
+| 403 | `RECURSO_NAO_PERMITIDO_NO_PLANO` | operação em nome de usuário (`X-User` + `SERVICE JWT`) cujo plano (`profile.plan` do único `profile` no `USER JWT`) **não permite** o recurso externo `PAYMENT` (`FREE`) — validado **antes** de qualquer efeito (ADR-022, seção 26.10; ver seção 10) |
+| 403 | `LIMITE_PLANO_ATINGIDO` | operação em nome de usuário `FREE` (`X-User` + `SERVICE JWT`) cujo titular já atingiu `payment.maxRecords` (secundário ao gating de recurso; ver seção 10) |
+
+**Headers — operação em nome de usuário (seção 9.4):**
+```http
+POST /v1/payments
+Authorization: Bearer <SERVICE_JWT>   # a aplicação chamadora (executor, roles sobre PAYMENT_SERVICE — BD-24)
+X-User: <USER_JWT>                    # o usuário em nome de quem a operação corre (identidade + profile único: app/roles/plan)
+```
+O `USER JWT` é específico de uma aplicação (um único `profile`); o contexto de aplicação e o plano vêm de `profile.app`/`profile.plan` no token assinado (seção 9.3/9.4) — não há header `X-User-App`.
+
+Operação **sistema-a-sistema** (sem usuário) traz **só** `Authorization: Bearer <SERVICE_JWT>` — nunca `X-User`. No **encadeamento** de uma mesma operação, o `X-User` permanece fixo; só o `Authorization` muda para o `SERVICE_JWT` de cada executor.
+
+> **Gating de plano (em nome de usuário) — ADR-022/BD-21, ver seção 10.** Quando a criação chega em **contexto de usuário** (reconhecido por `X-User: <USER_JWT>` + `Authorization: <SERVICE_JWT>`, seção 9.4), **antes** da validação de cobrança (BD-11), da obtenção do recebedor (BD-16) e do envio ao provedor (BD-13), o serviço valida o **recurso externo `PAYMENT`** contra o plano lido **direto** de `profile.plan` do único `profile` no **`USER JWT`** (`X-User`; `profile.app` diz a aplicação do contexto, confiável por estar no JWT assinado): `FREE` → `403 RECURSO_NAO_PERMITIDO_NO_PLANO` (nenhum Payment criado, nenhuma chamada externa feita); `PRO`/`MAX` → prossegue. Só então aplica o **limite** (`FREE` → `payment.maxRecords` por titular `owner_user_id` = `sub` do `USER JWT`, excedente → `403 LIMITE_PLANO_ATINGIDO`) e define `purge_at`. Operações **sistema-a-sistema** (só `SERVICE JWT`, sem `X-User`) não passam por esse gating.
 
 ---
 
@@ -207,7 +221,7 @@ Sem paginação nesta versão (histórico de um único Payment, volume tipicamen
 
 ## 8. Health Check, Readiness Check e Identificação de Build — ADR-019
 
-*(Nova, 2026-08-13.)* Padrão organizacional (`padrao-desenvolvimento.md`, seção 12), obrigatório para todo serviço da empresa — ver ADR-019 para o raciocínio completo e a tabela de dependências específicas deste serviço (incluindo o Hotspot H04 sobre `Billing Service`/`Person Service`).
+Padrão organizacional (`padrao-desenvolvimento.md`, seção 12), obrigatório para todo serviço da empresa — ver ADR-019 para o raciocínio completo e a tabela de dependências específicas deste serviço (incluindo o Hotspot H04 sobre `Billing Service`/`Person Service`).
 
 ### `GET /health`
 
@@ -228,18 +242,6 @@ Sem autenticação; exceção de versionamento. Liveness — nunca consulta Post
 ### `GET /ready`
 
 Sem autenticação. Readiness — verifica as dependências obrigatórias deste serviço (PostgreSQL, banco `payment`, ADR-018; `auth-service`, via `GET /health` dele). `Billing Service`, `Person Service`, `Payment Provider`, `Notification Service`, OpenBao e RabbitMQ **não** entram neste check (ver ADR-019 para o raciocínio completo, incluindo o Hotspot H04).
-
-**Response — 200 OK:**
-~~```json
-{ "status": "READY", "checks": { "database": "UP", "auth-service": "UP" } }
-```~~
-
-**Response — 503 Service Unavailable:**
-~~```json
-{ "status": "NOT_READY", "checks": { "database": "DOWN", "auth-service": "UP" } }
-```~~
-
-**Atualização (2026-08-13):** o formato `checks` (valor string) é substituído pelo formato abaixo, que complementa cada verificação com `responseTime` (ms, sem unidade) — permite identificar degradação de desempenho, não só indisponibilidade (`padrao-desenvolvimento.md`, seção 12.3).
 
 **Response — 200 OK:**
 ```json
@@ -267,6 +269,101 @@ Sem autenticação. Readiness — verifica as dependências obrigatórias deste 
 
 ---
 
+## 9. Expurgo de Pagamentos `PENDING` Órfãos (Endpoint Interno) — ADR-021
+
+Expurgo por retenção — endpoint **padronizado** `POST /internal/purge`, idêntico em nome entre todos os serviços (`padrao-desenvolvimento.md`, seção 5).
+
+`POST /internal/purge`
+
+**Prefixo `/internal/*`, sem `/v1`** (convenção de infraestrutura Nginx, `padrao-desenvolvimento.md`, seção 14.3) — nunca exposto pelo Nginx, alcançável somente pela rede interna do Docker Compose.
+
+**Autenticação:** Bearer JWT — Token de Serviço M2M, perfil `SCHEDULER` (`padrao-desenvolvimento.md`, seções 9.1/9.3), obtido pelo `scheduler-service` junto a `auth-service`. Nunca `ADMIN`.
+
+**Request:** sem corpo (o disparo é "é hora, execute", sem payload de negócio).
+
+**Lógica executada** (ADR-021): seleciona candidatos `status = PENDING` com `createdAt < (agora − minPendingAge)` (`minPendingAge` padrão 24h\*, configurável `payment.purge.minPendingAgeHours`); para cada candidato, **consulta o `billing-service` (M2M)** se a Cobrança `billingId` existe. Executa `DELETE` físico **somente** dos que o `billing-service` confirma **inexistentes**. Se o `billing-service` estiver indisponível/inconclusivo, o candidato é **poupado** (não expurgado) e contado em `billingUnavailableSkipped`. Registra auditoria (`operation = PAYMENT_PURGE`, sem dado financeiro). **Nunca** remove registros de auditoria; nunca expurga `APPROVED`/`REJECTED`/`CANCELLED`/`REFUNDED`.
+
+Este mesmo endpoint tem um **segundo motivo** de expurgo — a **retenção `FREE`** (seção 26.8 do padrão, ADR-022/BD-21). Na mesma execução, além dos órfãos-`PENDING` acima, seleciona os `payments` com `purge_at <= now()` (critério **temporal**, **não** relacional — **não** consulta o `billing-service`, independe do status) e, para cada um, remove primeiro os relacionados (`payment_status_history`, `payment_provider_events`) e depois o próprio Payment, respeitando o `ON DELETE RESTRICT` pela ordem de remoção. **Nunca** um endpoint separado (seção 26.8). A resposta inclui o contador `retentionPurged`; `paymentsPurged` é o total dos dois motivos. No MVP o motivo de retenção fica inerte (nenhum Payment `FREE` é criado, pois `FREE` não permite o recurso `PAYMENT` — ADR-022). Ver ADR-022 e a seção 10.
+
+**Response — 200 OK:**
+```json
+{
+  "status": "SUCCESS",
+  "executedAt": "2026-08-15T03:00:00-03:00",
+  "candidatesEvaluated": 340,
+  "billingUnavailableSkipped": 5,
+  "orphanPendingPurged": 22,
+  "retentionPurged": 0,
+  "paymentsPurged": 22
+}
+```
+
+Idempotente — nenhum elegível (por nenhum dos dois motivos) → `200 OK` com `paymentsPurged: 0`, sem erro.
+
+**Erros:**
+
+| HTTP | `error.code` | Motivo |
+|---|---|---|
+| 401 | `NAO_AUTENTICADO` | token ausente/inválido/expirado |
+| 403 | `PERFIL_INSUFICIENTE` | chamador sem o perfil `SCHEDULER` |
+
+---
+
+## 10. Planos, Recurso Externo `PAYMENT`, Retenção e Expurgo — ADR-022 (padrão seção 26)
+
+O `payment-service` é **aplicação alvo**: ao receber uma operação **em nome de um usuário** (dois tokens, seção 9.4 — `SERVICE JWT` no `Authorization` + `USER JWT` no `X-User`), lê o `plan` **direto** de `profile.plan` do único `profile` do **`USER JWT`** (o token é específico de uma aplicação — `profile.app` diz o contexto; seção 9.3/26.2) e o `sub` do usuário (via `TokenClaims` da `codepump-lib`), e aplica **recurso externo/limite/retenção** desse plano. Não há header `X-User-App` nem o erro `403 CONTEXTO_APLICACAO_INVALIDO` — o contexto de aplicação vem de `profile.app`. `PAYMENT` é o **recurso externo** exemplo da seção 26.10 (`FREE` não permite; `PRO`/`MAX` permitem). Ver ADR-022/BD-21.
+
+### 10.1 Consulta de Planos — `GET /plans`
+
+Leitura **pública** das configurações de plano deste serviço, **incluindo os recursos externos por plano**. Sem dado interno desnecessário (seção 26.4).
+
+**Response — 200 OK:**
+```json
+{
+  "plans": [
+    { "plan": "FREE", "externalResources": [{ "resource": "PAYMENT", "allowed": false }], "limits": { "payment.maxRecords": 20 }, "retentionDays": 30 },
+    { "plan": "PRO",  "externalResources": [{ "resource": "PAYMENT", "allowed": true }],  "limits": { "payment.maxRecords": null }, "retentionDays": null },
+    { "plan": "MAX",  "externalResources": [{ "resource": "PAYMENT", "allowed": true }],  "limits": { "payment.maxRecords": null }, "retentionDays": null }
+  ]
+}
+```
+
+`payment.maxRecords = 20`\* e `retentionDays = 30`\* são valores assumidos/configuráveis; `PAYMENT` não permitido em `FREE` é decidido pela spec (seção 26.10), não assumido.
+
+### 10.2 Configuração de Planos — `/config/plans`
+
+Administração dos valores acima (recursos externos, limites, retenção), sob a Interface Web de Configuração já adotada por este serviço (**ADR-020**, `GET /admin/config`), perfil **`ADMIN`** (seção 9.1 do padrão). Validação no backend; auditoria de mudança (`AuditEvent`, `resource = CONFIG`); nunca expõe sensíveis. Sem API de consulta paralela — usa os `GET` padronizados.
+
+### 10.3 Atualização de Plano do Usuário — `POST /internal/users/{userId}/plan`
+
+Endpoint **interno** (M2M, Token de `SERVICE`), chamado pela aplicação de pagamento no fluxo de upgrade/downgrade. **Prefixo `/internal/*`, sem `/v1`**, nunca exposto pelo Nginx (seção 14.3). **O chamador não informa quais registros** — o serviço decide internamente.
+
+**Request:** `{ "plan": "PRO" }`
+
+**Comportamento:**
+- **Upgrade** (`FREE → PRO`/`MAX`): atualiza o plano aplicável ao titular `userId`; localiza os Payments do titular com `purge_at IS NOT NULL`; **zera `purge_at`**; mantém os dados permanentes.
+- **Downgrade** (`PRO`/`MAX → FREE`): **não** atribui `purge_at` a registros existentes (MVP).
+
+**Response — 200 OK:** `{ "userId": "...", "plan": "PRO", "recordsReleased": 0 }`
+
+**Erros:** `400 PLANO_INVALIDO` (fora de `FREE`/`PRO`/`MAX`); `401 NAO_AUTENTICADO`; `403 PERFIL_INSUFICIENTE`.
+
+### 10.4 Expurgo de Retenção — dentro do `POST /internal/purge` (seção 9)
+
+O expurgo de retenção `FREE` (`payments.purge_at <= now()`) **não** tem endpoint próprio — é o **segundo motivo** do `POST /internal/purge` já documentado na **seção 9** (seção 26.8: nunca um endpoint separado). Ver a seção 9.
+
+### Resumo de Rotas (planos/expurgo)
+
+| Método | Rota | Perfil |
+|---|---|---|
+| GET | `/plans` | Público (leitura) |
+| POST | `/internal/users/{userId}/plan` | Bearer (`SERVICE`, M2M) |
+| POST | `/internal/purge` | Bearer (`SCHEDULER`, M2M) — ver seção 9 (órfão-`PENDING` + retenção `FREE`) |
+
+> **Nota (criação de Payment, seção 1):** ao criar Payment em contexto de usuário (`X-User` + `SERVICE JWT`, seção 9.4), aplica-se o gating do recurso externo `PAYMENT` contra o plano lido **direto** de `profile.plan` do único `profile` no `USER JWT` (`FREE` → `403 RECURSO_NAO_PERMITIDO_NO_PLANO`), depois o **limite** (`FREE` → `payment.maxRecords` por titular, excedente → `403 LIMITE_PLANO_ATINGIDO`), e define-se `purge_at` para titular `FREE` (`created_at + retentionDays`). Ver ADR-022/BD-21.
+
+---
+
 ## Pontos Abertos
 
 * **Formato exato de `paymentData` na criação (seção 1)** e **payload exato do webhook (seção 4)** — dependem do provedor real (Hotspot H01) e do mecanismo de autenticidade (Hotspot H02).
@@ -279,8 +376,6 @@ Sem autenticação. Readiness — verifica as dependências obrigatórias deste 
 
 ## Resumo de Rotas
 
-*(Nova, 2026-08-13 — ADR-019.)*
-
 | Método | Rota | Auth | Seção |
 |---|---|---|---|
 | POST | `/v1/payments` | Bearer (`PAYMENT_CREATE`) | 1 |
@@ -292,5 +387,8 @@ Sem autenticação. Readiness — verifica as dependências obrigatórias deste 
 | GET | `/v1/payments/{id}/history` | Bearer (`PAYMENT_READ`) | 7 |
 | GET | `/health` | — | 8 (ADR-019) |
 | GET | `/ready` | — | 8 (ADR-019) |
+| POST | `/internal/purge` | Bearer (`SCHEDULER`, M2M) | 9 (ADR-021 órfão-`PENDING` + ADR-022 retenção `FREE`) |
+| GET | `/plans` | Público (leitura) | 10 (ADR-022) |
+| POST | `/internal/users/{userId}/plan` | Bearer (`SERVICE`, M2M) | 10 (ADR-022) |
 
-Fora deste versionamento (ADR-005): `GET /health`, `GET /ready` (seção 8).
+Fora deste versionamento (ADR-005): `GET /health`, `GET /ready` (seção 8), `POST /internal/purge` e `POST /internal/users/{userId}/plan` (prefixo `/internal/*`, `padrao-desenvolvimento.md` seção 14.3). `GET /plans` é leitura pública das configurações de plano (seção 26.4) — sem `/v1`, como os demais endpoints de plano do padrão.
