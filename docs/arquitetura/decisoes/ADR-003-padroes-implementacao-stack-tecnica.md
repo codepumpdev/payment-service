@@ -12,7 +12,7 @@
 `Payment Service` adota integralmente:
 
 ```text
-Framework HTTP ....... net/http (stdlib) + chi
+Framework HTTP ....... net/http (stdlib) + http.ServeMux
 Acesso a PostgreSQL ... pgx / pgxpool — sem ORM, SQL explícito
 Migração de schema .... golang-migrate
 Formatação ............ gofmt
@@ -25,7 +25,7 @@ Estrutura de pacotes:
 ```text
 cmd/payment-service/main.go
 internal/
-  domain/          # Payment, máquina de estados, invariantes — nunca importa chi/pgx/detalhe de provedor
+  domain/          # Payment, máquina de estados, invariantes — nunca importa net/http/pgx/detalhe de provedor
   application/      # casos de uso (Criar Payment, Processar Webhook, ...)
   infrastructure/    # PostgreSQL, JWT, OpenBao, PaymentProvider concreto
   interfaces/        # HTTP handlers, DTOs

@@ -17,7 +17,8 @@
 #      colar em scripts/postgres/database.cmd.
 #   3. Rode o database.cmd com essas senhas.
 #
-# Ajuste BAO_ADDR se o servidor não for o local.
+# BAO_ADDR usa o nome do serviço na rede do Compose.
+# Ajuste se o cofre não for o do Compose local.
 #
 # Rodar duas vezes é seguro: engine, AppRole e secrets já
 # existentes são preservados — e as senhas impressas no fim
@@ -26,7 +27,7 @@
 #
 # ============================================================
 
-export BAO_ADDR="${BAO_ADDR:-http://127.0.0.1:8200}"
+export BAO_ADDR="${BAO_ADDR:-http://openbao:8200}"
 
 # Senhas geradas agora (exporte a variável antes de colar para
 # usar um valor próprio)

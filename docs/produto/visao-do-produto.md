@@ -126,7 +126,7 @@ Adoção direta do padrão organizacional (`codepump/codepump/docs/padrao-desenv
 
 ```text
 Backend            Go (Golang) — ADR-002
-Framework HTTP     net/http + chi — ADR-003
+Framework HTTP     net/http + http.ServeMux — ADR-003
 API                REST, prefixo /v1 — ADR-005
 Banco              PostgreSQL, via pgx/pgxpool, sem ORM — ADR-003
 Migração de schema golang-migrate — ADR-003
