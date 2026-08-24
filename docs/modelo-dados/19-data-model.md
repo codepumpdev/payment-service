@@ -134,3 +134,11 @@ Nenhuma tabela tem FK para fora deste banco — `billing_id` é referência opac
 * Se múltiplos meios de pagamento além de `PIX` forem suportados no futuro (BD-06, Evolução), `method` deixa de ter `CHECK` fixo em `'PIX'` — mudança aditiva simples.
 * Se múltiplas moedas forem suportadas no futuro (BD-05, Evolução), `currency` deixa de ter `CHECK` fixo em `'BRL'` — mudança aditiva simples.
 * Se um segundo provedor for implementado (BD-13, Evolução), nenhuma mudança de schema é necessária — `provider` já é um campo livre, não um `CHECK` fechado.
+
+---
+
+## Origem do banco: contextual (§28, ADR-024)
+
+`payments`, `payment_status_history`, `payment_provider_events` e `audit_logs` vivem no **banco do Contexto**, resolvido pelo `ContextResolver` a partir do claim `context`. Não há tabela global neste serviço.
+
+**Ponto aberto — webhook:** o retorno do provedor não traz o `USER JWT` do titular, e não se pode varrer bancos procurando a transação. O Contexto precisa vir da própria referência enviada ao provedor (opção preferida) ou de um índice global `transação → Contexto`, que tornaria o serviço misto (ADR-024).

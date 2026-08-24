@@ -20,7 +20,7 @@ Duas tensões específicas com decisões já vigentes deste serviço:
 
 ### 1. Planos (seção 26.1)
 
-`FREE`/`PRO`/`MAX` (enum `Plan` da `codepump-lib`). `MAX` reservado (tratado como `PRO` no MVP). Valores **configuráveis** (seção 26.3), nunca em código. Valores iniciais deste serviço:
+`FREE`/`PRO`/`MAX` (enum `Plan` da `codepump-lib`). `MAX` tratado como `PRO` **nesta aplicação** — continua verdadeiro depois da emenda de 2026-08-20 à §26.1: o único privilégio concreto de `MAX` é o **Contexto dedicado**, aplicado pelo `context-service` (ADR-014 de lá), e não por aplicação alvo nenhuma. Valores **configuráveis** (seção 26.3), nunca em código. Valores iniciais deste serviço:
 
 ```text
 FREE
@@ -85,7 +85,7 @@ O expurgo de retenção `FREE` é feito **dentro** do `/internal/purge` já exis
 ### 8. Endpoints de consulta/configuração
 
 - `GET /plans` — leitura **pública** das configurações de plano, **expondo os recursos externos por plano** (`externalResources`), além de limites e retenção. Não expõe interno (seção 26.4). Ex.: `FREE → externalResources: [{ resource: "PAYMENT", allowed: false }]`.
-- `/config/plans` — administração da configuração de planos, sob a Interface Web de Configuração já adotada por este serviço (**ADR-020**, `GET /admin/config`), perfil **`ADMIN`** (seção 9.1). Validação no backend; auditoria de mudança (`AuditEvent`, `resource = CONFIG`); nunca expõe sensíveis.
+- `/config/plans` — administração da configuração de planos, sob a API de Configuração já adotada por este serviço (**ADR-020**, `GET /admin/config`), perfil **`ADMIN`** (seção 9.1). Validação no backend; auditoria de mudança (`AuditEvent`, `resource = CONFIG`); nunca expõe sensíveis.
 
 ### 9. Fronteira (seção 26.11)
 
@@ -121,6 +121,6 @@ O `payment-service` **aplica** recurso externo/limite/retenção/expurgo; o `aut
 - `dominio/04-ubiquitous-language.md` — Plano / Titular / Recurso Externo (`PAYMENT`) / `purgeAt` / Expurgo (operação em nome de usuário com dois tokens `USER`+`SERVICE`, seção 9.4).
 - `arquitetura/decisoes/ADR-006-payment-imutavel-sem-remocao.md` — emenda (remoção física via expurgo de retenção `FREE`, além do órfão-`PENDING`).
 - `arquitetura/decisoes/ADR-021-expurgo-pagamentos-pendentes-orfaos.md` — nota de que o `/internal/purge` passa a expurgar também dados de retenção `FREE` (segundo motivo).
-- `arquitetura/decisoes/ADR-020-interface-web-configuracao.md` — `/config/plans` como especialização do `/admin/config`.
+- `arquitetura/decisoes/ADR-020-api-configuracao.md` — `/config/plans` como especialização do `/admin/config`.
 - `requisitos/10-functional-requirements.md` (**RF-11**, plano de `profile.plan`) + `12-acceptance-criteria.md` (cenário de gating por `profile.plan`).
 - `scheduler-service` — a Scheduled Task `payment-orphan-purge` (ADR-021) passa a cobrir também o expurgo de retenção `FREE` no mesmo `POST /internal/purge` (nenhuma nova task obrigatória).

@@ -312,7 +312,7 @@ Cada operação financeira do catálogo fechado é projetada em um `AuditEvent` 
 
 Esta é a **exceção explícita à ADR-006** (Pagamento imutável, sem remoção via API): a ADR-006 rege a API de negócio; o expurgo por retenção é manutenção interna disparada por máquina, prevista na seção 5 do padrão. É a primeira remoção física de Pagamento do serviço, restrita a `PENDING` órfão. Nunca toca em dado financeiro sensível — este serviço não o armazena.
 
-**Impacto:** `arquitetura/decisoes/ADR-021-expurgo-pagamentos-pendentes-orfaos.md`; `requisitos/10-functional-requirements.md` (RF-10); `dominio/08-aggregates.md`, `dominio/09-domain-state-machines.md`, `dominio/06-context-map.md` (consulta M2M ao `billing-service`); `contratos/17-api-contracts.md` (seção 9 + Resumo de Rotas); `arquitetura/decisoes/ADR-020-interface-web-configuracao.md` (`payment.purge.minPendingAgeHours`); `scheduler-service` (nova Scheduled Task `payment-orphan-purge`).
+**Impacto:** `arquitetura/decisoes/ADR-021-expurgo-pagamentos-pendentes-orfaos.md`; `requisitos/10-functional-requirements.md` (RF-10); `dominio/08-aggregates.md`, `dominio/09-domain-state-machines.md`, `dominio/06-context-map.md` (consulta M2M ao `billing-service`); `contratos/17-api-contracts.md` (seção 9 + Resumo de Rotas); `arquitetura/decisoes/ADR-020-api-configuracao.md` (`payment.purge.minPendingAgeHours`); `scheduler-service` (nova Scheduled Task `payment-orphan-purge`).
 
 **Consequências:**
 - Positivas: pagamentos `PENDING` órfãos deixam de acumular sem resolução; fecha o ciclo com o expurgo de faturas do `billing-service` (uma fatura expurgada lá torna seu pagamento `PENDING` elegível aqui), sem acoplamento síncrono entre os dois expurgos.

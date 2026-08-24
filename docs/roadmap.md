@@ -82,6 +82,16 @@ Nenhum dos quatro bloqueia o início da etapa de Implementação para E1 (Paymen
 
 ## Concluído
 
+### 2026-08-20 — Adoção do padrão de Contexto (ADR-024)
+
+O banco deixa de vir da configuração e passa a vir da identidade autenticada (§28 do padrão). O serviço é **contextual por inteiro**: `payments`, `payment_status_history`, `payment_provider_events` e `audit_logs` vivem no banco do Contexto.
+
+**Ponto aberto que a adoção revelou:** o webhook do provedor não chega com o `USER JWT` do titular, então não há de onde ler o Contexto — e não se pode varrer bancos procurando a transação. A saída preferida é carregar o Contexto na referência enviada ao provedor, que volta no webhook; a alternativa é um índice global `transação → Contexto`, que tornaria o serviço misto. Enquanto isso não for fechado, o webhook não opera — e é melhor assim do que resolvido por um banco padrão.
+
+Referências: `arquitetura/decisoes/ADR-024-adocao-do-padrao-de-contexto.md`, `codepump/docs/padrao-desenvolvimento.md` §28.7.
+
+---
+
 ### 2026-08-15 — ADR-022: Planos, Recurso Externo `PAYMENT`, Retenção e Upgrade (Aplicação Alvo)
 
 O `payment-service` é **aplicação alvo** e adota o padrão organizacional de planos (`padrao-desenvolvimento.md` seção 26), do qual é o **exemplo da spec** para **Recurso Externo** (seção 26.10). Recebe operações **em nome de** um usuário no modelo de **dois tokens** (seção 9.4 — `Authorization: Bearer <SERVICE_JWT>`, a aplicação chamadora, + `X-User: <USER_JWT>`, o usuário); não existe token `DELEGATE`. O `USER JWT` é **específico de uma aplicação** (um único `profile`): o **plano** — e portanto o **gating de `PAYMENT`** — é lido **direto de `profile.plan`**, e `profile.app` dá o contexto de aplicação (JWT assinado). Não há header `X-User-App` nem o erro `403 CONTEXTO_APLICACAO_INVALIDO`.
@@ -99,15 +109,15 @@ Propagado: `arquitetura/decisoes/ADR-022-planos-retencao-upgrade.md` (nova ADR),
 
 ---
 
-### 2026-08-14 — ADR-020: Interface Web de Configuração (`/admin/config`)
+### 2026-08-14 — ADR-020: API de Configuração (`/admin/config`)
 
-Adoção do padrão organizacional de **Interface Web de Configuração** (`padrao-desenvolvimento.md` seção 23; `codepump/docs/padroes-implementacao/padrao-interface-config.md`), obrigatório para todo serviço com configuração programável e sem UI administrativa própria — `payment-service` está nominalmente na lista abrangida.
+Adoção do padrão organizacional de **API de Configuração** (`padrao-desenvolvimento.md` seção 23; `codepump/docs/padroes-implementacao/padrao-api-config.md`), obrigatório para todo serviço com configuração programável e sem UI administrativa própria — `payment-service` está nominalmente na lista abrangida.
 
-**Nova ADR — ADR-020** (`arquitetura/decisoes/`): formaliza a tela `GET /admin/config`, servida pela própria aplicação Go (`net/http` + `html/template` + HTMX + CSS, sem SPA, recursos em `internal/web/` via `embed`), protegida por perfil administrativo validado no backend (seção 9), contraparte humana do `/props` (seção 16). Enumera as categorias de configuração reais (Aplicação, Banco, Serviços internos, Serviços externos, Mensageria, Operacional), distinguindo read-only (host/porta/build/`environment`/banco lógico) de editável (timeouts de chamada HTTP — ADR-010, provedor de pagamento ativo — ADR-015, timeout do Readiness Check), com efeito imediato × exige reinicialização sinalizado. Segredos (senha do banco, `client_secret` M2M, chave/segredo de webhook do provedor, credencial do RabbitMQ) **nunca** exibidos — OpenBao (ADR-008), só indicador booleano. Mudanças de configuração auditadas via `AuditEvent` canônico (`resource = CONFIG`, `data` com propriedade + valor anterior/novo, nunca sensível — seção 17). Sem API paralela: reutiliza os GET padronizados (seção 20). Fase de documentação — fixa o escopo/padrão da tela, não o HTML real.
+**Nova ADR — ADR-020** (`arquitetura/decisoes/`): formaliza a endpoint `GET /admin/config`, servida pela própria aplicação Go (`net/http` + `html/template` + HTMX + CSS, sem SPA, recursos em `internal/web/` via `embed`), protegida por perfil administrativo validado no backend (seção 9), contraparte humana do `/props` (seção 16). Enumera as categorias de configuração reais (Aplicação, Banco, Serviços internos, Serviços externos, Mensageria, Operacional), distinguindo read-only (host/porta/build/`environment`/banco lógico) de editável (timeouts de chamada HTTP — ADR-010, provedor de pagamento ativo — ADR-015, timeout do Readiness Check), com efeito imediato × exige reinicialização sinalizado. Segredos (senha do banco, `client_secret` M2M, chave/segredo de webhook do provedor, credencial do RabbitMQ) **nunca** exibidos — OpenBao (ADR-008), só indicador booleano. Mudanças de configuração auditadas via `AuditEvent` canônico (`resource = CONFIG`, `data` com propriedade + valor anterior/novo, nunca sensível — seção 17). Sem API paralela: reutiliza os GET padronizados (seção 20). Fase de documentação — fixa o escopo/padrão da tela, não o HTML real.
 
 Propagado para: `produto/visao-do-produto.md` (nota na seção 6 — Segurança), `planejamento/21-user-stories.md` (exceção ao "Frontend N/A" da convenção), este roadmap.
 
-Referências: `arquitetura/decisoes/ADR-020-interface-web-configuracao.md`, `codepump/codepump/docs/padrao-desenvolvimento.md` (seção 23), `codepump/codepump/docs/padroes-implementacao/padrao-interface-config.md`.
+Referências: `arquitetura/decisoes/ADR-020-api-configuracao.md`, `codepump/codepump/docs/padrao-desenvolvimento.md` (seção 23), `codepump/codepump/docs/padroes-implementacao/padrao-api-config.md`.
 
 ---
 

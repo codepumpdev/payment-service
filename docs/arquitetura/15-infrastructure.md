@@ -49,9 +49,9 @@ Paths concretos deste serviço, na convenção da seção 8.1 do padrão. A poli
 | `secret/payment-service/m2m` | `client_id`, `client_secret` | Credencial de Aplicação própria, usada para obter Token de Serviço M2M no `auth-service`. |
 | `secret/payment-service/providers/payment` (e `/*`) | definidos pelo fornecedor | **Path autorizado, sem secret criado.** Cada provedor recebe o seu sob demanda — ex.: `secret/payment-service/providers/payment/<fornecedor>`. |
 
-Provisionados por `scripts/openbao/setup-payment-service.cmd`, que é a fonte da verdade destes paths — um secret que já existe é preservado pelo script.
+Provisionados pelo passo de cofre do provisionamento centralizado (`codepump/implementation`, `-Servico payment-service`), que é a fonte da verdade destes paths — um secret que já existe é preservado.
 
-As senhas de banco são geradas pelo script do OpenBao e depois usadas no `scripts/postgres/database.cmd` — o OpenBao é a origem, o banco é o consumidor, nunca o contrário.
+As senhas de banco nascem no passo de cofre e são copiadas para o Postgres pelo passo de banco — o OpenBao é a origem, o banco é o consumidor, nunca o contrário.
 
 ---
 

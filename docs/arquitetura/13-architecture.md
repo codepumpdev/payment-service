@@ -101,3 +101,15 @@ A comunicação com `Billing Service` (consulta + informe), `Person Service` (co
 * Introduzir RabbitMQ quando a necessidade de desacoplamento entre `Payment Service` e `Billing Service`/`Person Service`/`Notification Service`/provedor for real (BD-14, ADR-010) — não antecipar.
 * Suportar múltiplos provedores simultâneos, com escolha por regra de negócio, quando houver necessidade real (BD-13, seção 36 do documento funcional).
 * Implementar `POST /v1/payments/{id}/refund` quando o Hotspot H03 for resolvido.
+
+---
+
+## Classificação no padrão de Contexto (§28)
+
+**Este serviço é contextual por inteiro** (ADR-024): `payments`, `payment_status_history`, `payment_provider_events` e `audit_logs` vivem no banco do Contexto.
+
+**Ponto aberto:** o webhook do provedor não chega com o `USER JWT` do titular. O Contexto precisa ser resolvido a partir da própria transação — preferencialmente por uma referência que carregue o Contexto e volte no webhook (ADR-024). Enquanto não estiver fechado, o webhook não opera.
+
+A origem do banco por operação é a resolução, nunca a configuração: nenhum repositório guarda pool próprio, nenhum conhece a associação `Contexto → banco`, e não existe Contexto padrão nem banco de fallback (§28.8). Cache, concorrência e ciclo de vida de pool são da `codepump-lib` — se aparecer esse código aqui, está errado por definição.
+
+Ver a ADR de adoção deste serviço e `codepump/docs/padrao-desenvolvimento.md` §28.

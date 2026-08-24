@@ -332,7 +332,7 @@ Leitura **pública** das configurações de plano deste serviço, **incluindo os
 
 ### 10.2 Configuração de Planos — `/config/plans`
 
-Administração dos valores acima (recursos externos, limites, retenção), sob a Interface Web de Configuração já adotada por este serviço (**ADR-020**, `GET /admin/config`), perfil **`ADMIN`** (seção 9.1 do padrão). Validação no backend; auditoria de mudança (`AuditEvent`, `resource = CONFIG`); nunca expõe sensíveis. Sem API de consulta paralela — usa os `GET` padronizados.
+Administração dos valores acima (recursos externos, limites, retenção), sob a API de Configuração já adotada por este serviço (**ADR-020**, `GET /admin/config`), perfil **`ADMIN`** (seção 9.1 do padrão). Validação no backend; auditoria de mudança (`AuditEvent`, `resource = CONFIG`); nunca expõe sensíveis. Sem API de consulta paralela — usa os `GET` padronizados.
 
 ### 10.3 Atualização de Plano do Usuário — `POST /internal/users/{userId}/plan`
 
@@ -392,3 +392,24 @@ O expurgo de retenção `FREE` (`payments.purge_at <= now()`) **não** tem endpo
 | POST | `/internal/users/{userId}/plan` | Bearer (`SERVICE`, M2M) | 10 (ADR-022) |
 
 Fora deste versionamento (ADR-005): `GET /health`, `GET /ready` (seção 8), `POST /internal/purge` e `POST /internal/users/{userId}/plan` (prefixo `/internal/*`, `padrao-desenvolvimento.md` seção 14.3). `GET /plans` é leitura pública das configurações de plano (seção 26.4) — sem `/v1`, como os demais endpoints de plano do padrão.
+
+---
+
+## Invalidação do cache de Contexto — `POST /internal/resetContext`
+
+Rota **interna** (M2M, §9.3), obrigatória em todo serviço que usa o `ContextResolver` (`codepump/docs/padrao-desenvolvimento.md` §28.10). Não é exposta pelo Nginx e não é operação de negócio.
+
+```http
+POST /internal/resetContext
+→ 204 No Content
+```
+
+**Sem parâmetros e sem corpo.** Descarta **todas** as resoluções de Contexto mantidas por este processo, fecha os pools PostgreSQL associados a elas e deixa a próxima utilização de cada Contexto responsável por uma nova resolução no `context-service`.
+
+Não pré-carrega nada, não reconstrói o cache, não altera dado, não fala com o `context-service` durante o reset e não reinicia o processo. Se depois do reset só `prod_2` for usado, só `prod_2` volta ao cache.
+
+**A rota não aceita Contexto do cliente** — não existe `resetContext/{context}`, e a ausência é deliberada (§28.10): uma resolução é resultado de um estado do catálogo, e descartar meio estado deixa no cache justamente o que ninguém lembrou de invalidar.
+
+**A invalidação é local ao processo.** Resetar uma instância não invalida as outras: cobrir todas as instâncias dos serviços afetados é do procedimento de alteração de infraestrutura, que executa nesta ordem — alterar a infraestrutura, atualizar o `context-service`, resetar os serviços, validar o acesso.
+
+> Implementação: a rota chama `resolver.Reset()` da `codepump-lib` e responde `204`. O `Reset` **bloqueia até os pools antigos fecharem**, e uma requisição que já estava em andamento falha ao usar a resolução descartada — refeita na tentativa seguinte.

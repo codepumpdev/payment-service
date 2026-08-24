@@ -91,7 +91,7 @@ Idempotente — reexecução sem elegíveis retorna `paymentsPurged: 0`. Candida
 * `dominio/01-event-storming-big-picture.md`, `02-event-stories.md`, `07-domain-services.md` — novo fluxo/ES de expurgo; serviço de domínio "Expurgador de Pagamentos Órfãos".
 * `dominio/06-context-map.md` — `scheduler-service` dispara `POST /internal/purge`; `billing-service` é consultado (M2M) para verificar existência da Cobrança; `audit-service` recebe o `AuditEvent`.
 * `contratos/17-api-contracts.md` — nova seção 9 com o contrato de `POST /internal/purge`; nova linha na tabela "Resumo de Rotas".
-* `arquitetura/decisoes/ADR-020-interface-web-configuracao.md` — nova propriedade configurável `payment.purge.minPendingAgeHours`.
+* `arquitetura/decisoes/ADR-020-api-configuracao.md` — nova propriedade configurável `payment.purge.minPendingAgeHours`.
 * `arquitetura/decisoes/ADR-006-payment-imutavel-sem-remocao.md` — nota de que o expurgo por retenção de `PENDING` órfão (ADR-021) é a exceção da seção 5 do padrão.
 * `scheduler-service` (`dominio/03-business-decisions.md`, `dominio/01-event-storming-big-picture.md`, `arquitetura/13-architecture.md`) — nova Scheduled Task `payment-orphan-purge` → `payment-service` `POST /internal/purge`.
 * `codepump/codepump/docs/padrao-desenvolvimento.md` — seção 5 (exceção de expurgo / endpoint padronizado), seção 13 (scheduler), seção 17 (auditoria), seção 9.1 (perfil `SCHEDULER`), seção 16/23 (configuração/`/props`/`/admin/config`).
