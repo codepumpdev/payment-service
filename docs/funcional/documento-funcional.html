@@ -182,9 +182,10 @@
     <li><a href="#estorno">9. Estorno</a></li>
     <li><a href="#historico">10. Histórico e Auditoria</a></li>
     <li><a href="#seguranca">11. Segurança: Quem Pode Fazer o Quê</a></li>
-    <li><a href="#mvp">12. Escopo da Primeira Versão</a></li>
-    <li><a href="#hotspots">13. Perguntas Ainda Abertas</a></li>
-    <li><a href="#resumo">14. Resumo: O que Cada Sistema Consumidor Precisa Saber</a></li>
+    <li><a href="#planos">12. O Plano do Cliente</a></li>
+    <li><a href="#mvp">13. Escopo da Primeira Versão</a></li>
+    <li><a href="#hotspots">14. Perguntas Ainda Abertas</a></li>
+    <li><a href="#resumo">15. Resumo: O que Cada Sistema Consumidor Precisa Saber</a></li>
   </ol>
 </nav>
 
@@ -309,8 +310,25 @@
   <p>Senhas, chaves privadas, CVV, dado bancário completo e tokens de acesso nunca aparecem em nenhum registro técnico interno (log) nem são armazenados além do estritamente necessário.</p>
 </section>
 
+<section id="planos">
+  <h2>12. O Plano do Cliente</h2>
+  <p>Como os demais serviços da plataforma, este aplica o <strong>plano que o cliente contratou</strong> — definido pelo Billing Service, que informa o que cada plano concede aqui.</p>
+
+  <h3>Uma exceção que este serviço precisa ter</h3>
+
+  <p>Quando um cliente atrasa o pagamento, o acesso dele fica em somente leitura em toda a plataforma. Aqui isso não pode valer para tudo, por um motivo simples:</p>
+
+  <div class="box">
+    <strong>O pagamento que quita a dívida precisa continuar funcionando.</strong> Bloquear a operação de pagar por causa de uma fatura em aberto deixaria o cliente sem como sair da inadimplência — ele não conseguiria pagar justamente porque não pagou.
+  </div>
+
+  <p>Por isso a suspensão por atraso <strong>nunca</strong> alcança o fluxo de pagamento em si. Ela pode alcançar o que é acessório — relatórios, configurações, integrações novas —, jamais o caminho pelo qual o dinheiro entra.</p>
+
+  <p>Vale também para o que chega de fora: a confirmação de um pagamento, o retorno do adquirente, um estorno informado pelo provedor — tudo continua sendo registrado, com fatura em aberto ou não.</p>
+</section>
+
 <section id="mvp">
-  <h2>12. Escopo da Primeira Versão</h2>
+  <h2>13. Escopo da Primeira Versão</h2>
   <p>
     <span class="pill">Criação de pagamento (RECEIVE e PAY)</span>
     <span class="pill">Consulta por código e por cobrança</span>
@@ -337,7 +355,7 @@
 </section>
 
 <section id="hotspots">
-  <h2>13. Perguntas Ainda Abertas</h2>
+  <h2>14. Perguntas Ainda Abertas</h2>
   <div class="box open">
     <strong>Qual provedor de pagamento será efetivamente integrado?</strong> A especificação usa nomes ilustrativos ("Provider A", "Provider B"); nenhum provedor real foi escolhido. Esta documentação assume um nome interno provisório (<code>PROVIDER_A</code>) só para viabilizar o restante do desenho.
   </div>
@@ -350,7 +368,7 @@
 </section>
 
 <section id="resumo">
-  <h2>14. Resumo: O que Cada Sistema Consumidor Precisa Saber</h2>
+  <h2>15. Resumo: O que Cada Sistema Consumidor Precisa Saber</h2>
   <ol>
     <li>Autentique-se pelo serviço central de autenticação da empresa — nunca existe login próprio aqui (exceto para o provedor, no webhook).</li>
     <li>Sempre envie uma chave de repetição ao criar um pagamento, para evitar duplicidade em caso de reenvio.</li>

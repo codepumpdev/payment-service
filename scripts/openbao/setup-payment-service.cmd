@@ -33,7 +33,19 @@ export BAO_ADDR="${BAO_ADDR:-http://openbao:8200}"
 # usar um valor próprio)
 OWNER_PASSWORD="${OWNER_PASSWORD:-$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)}"
 APP_PASSWORD="${APP_PASSWORD:-$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)}"
-M2M_CLIENT_SECRET="${M2M_CLIENT_SECRET:-$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48)}"
+
+# O client_secret M2M NÃO é gerado aqui, e a diferença importa: as senhas do
+# banco são NOSSAS — nós as inventamos e o Postgres as aceita. O client_secret
+# é do auth-service: ele o GERA no registro da Aplicação, guarda só o hash e o
+# mostra UMA vez, na resposta.
+#
+# Gerar um valor aqui produzia uma entrada no cofre que PARECIA pronta e não
+# autenticava em lugar nenhum — pior do que a entrada ausente, porque escondia
+# o passo que faltava. O sintoma aparecia longe daqui: 401 na primeira chamada
+# a outro serviço.
+#
+# O passo a passo está em scripts/auth/registrar-payment-service.md, e o
+# essencial é impresso no fim deste script.
 
 # Engine KV v2 e AppRole, se ainda não habilitados
 bao secrets list | grep -q '^secret/'  || bao secrets enable -path=secret kv-v2
@@ -80,10 +92,26 @@ bao kv put -mount=secret payment-service/database/query \
     payment_app_user='payment-app' \
     payment_app_password="${APP_PASSWORD}"
 
+# Entrada M2M: os DOIS campos vêm do auth-service, e nenhum é o nome da
+# Aplicação.
+#
+#   PAYMENT_SERVICE      é o ID DA APLICAÇÃO. Vai no `sub` do SERVICE JWT, e é
+#                        por ele que o serviço de destino autoriza a chamada.
+#
+#   client_id            é o identificador da CREDENCIAL — opaco, gerado,
+#                        algo como "aQ7x-KpR2mN4vT8sLb1wZg". Serve ao Basic Auth
+#                        da emissão do token, e a mais nada.
+#
+# Confundi-los produz 401 na emissão: o auth-service procura a credencial
+# pelo client_id, e o nome da Aplicação não é um.
+#
+# PENDENTE é marca deliberada, e não descuido: um campo AUSENTE faria o
+# serviço subir e falhar com "campo não encontrado", e a mensagem não diria o
+# que fazer. Assim, quem abrir o cofre vê o que falta.
 bao kv get -mount=secret payment-service/m2m >/dev/null 2>&1 || \
 bao kv put -mount=secret payment-service/m2m \
-    client_id='PAYMENT_SERVICE' \
-    client_secret="${M2M_CLIENT_SECRET}"
+    client_id='PENDENTE-registrar-no-auth-service' \
+    client_secret='PENDENTE-registrar-no-auth-service'
 
 # Credenciais de Provider não são criadas aqui: cada fornecedor
 # ganha o seu secret sob o path do canal, sob demanda — ex.:
@@ -105,4 +133,31 @@ bao write -f auth/approle/role/payment-service/secret-id
 echo
 echo "    -v owner_password='$(bao kv get -mount=secret -field=payment_owner_password payment-service/database/command)' \\"
 echo "    -v app_password='$(bao kv get -mount=secret -field=payment_app_password payment-service/database/command)' \\"
+echo
+
+# ------------------------------------------------------------
+# Credencial M2M — PENDENTE
+# ------------------------------------------------------------
+echo
+echo "  ATENCAO - as credenciais M2M ainda NAO estao no cofre."
+echo
+echo "  Os dois saem do registro da Aplicacao, e o secret e mostrado UMA"
+echo "  unica vez. Registre a Aplicacao la, com um token de administrador:"
+echo
+echo "    POST \$AUTH_URL/v1/admin/aplicacoes"
+echo "         {\"id\":\"PAYMENT_SERVICE\",\"name\":\"PAYMENT_SERVICE\",\"external\":false}"
+echo "    POST \$AUTH_URL/v1/admin/aplicacoes/PAYMENT_SERVICE/credenciais"
+echo
+echo "  Passo a passo: scripts/auth/registrar-payment-service.md"
+echo
+echo "  Copie clientId E clientSecret da resposta e grave os dois:"
+echo
+echo "    bao kv put -mount=secret payment-service/m2m \\"
+echo "        client_id='<o clientId devolvido pelo auth-service>' \\"
+echo "        client_secret='<o clientSecret devolvido>'"
+echo
+echo "  O clientId NAO e 'PAYMENT_SERVICE' - aquele e o ID da Aplicacao,"
+echo "  e vai no sub do token. O clientId e opaco e gerado."
+echo
+echo "  Enquanto estiver PENDENTE, as chamadas M2M deste servico falham com 401."
 echo

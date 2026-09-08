@@ -1,8 +1,15 @@
 # ADR-024 — Adoção do Padrão de Contexto: o Banco Vem da Identidade, Não da Configuração
 
-- **Status:** Aceita
+- **Status:** Superada (2026-09-07)
 - **Data:** 2026-08-20
 - **Origem:** `codepump/docs/padrao-desenvolvimento.md` §28; `codepump-lib` ADR-011 (`contextresolver`); `context-service` ADR-006/ADR-018/ADR-019
+
+> **Superada em 2026-09-07.** Este serviço ainda não foi implementado. A adoção decidida aqui não deve ser executada: quando ele nascer, o banco vem da configuração dele.
+>
+> O conceito de Contexto foi removido da plataforma. O registro do que ele
+> era, do que custou e do que se perdeu ao retirá-lo está em `codepump/docs/contexto-o-que-foi-e-por-que-saiu.md`.
+> **O texto abaixo fica como estava** — ele descreve uma decisão real, tomada
+> por razões reais, e apagá-lo esconderia que a ideia já foi tentada.
 
 ## Contexto
 

@@ -1,5 +1,20 @@
 # Modelo de Dados — Tabelas
 
+> **Desatualizado em 2026-09-07 — o conceito de Contexto foi removido da plataforma.**
+>
+> O que neste documento descreve Contexto **não vale mais**: a separação entre tabelas do banco global e tabelas do banco de Contexto. Todas vivem no mesmo banco do serviço.
+>
+> A separação de dados passou a ser **por serviço**: cada serviço tem um banco,
+> com endereço na configuração dele, conhecido na partida. O padrão está em
+> `codepump/docs/padrao-desenvolvimento.md` §28; o registro do que o Contexto
+> era, do que custou e do que se perdeu ao retirá-lo está em
+> `codepump/docs/contexto-o-que-foi-e-por-que-saiu.md`.
+>
+> **O texto abaixo fica como estava.** Ele descreve decisões reais, tomadas por
+> razões reais, e reescrevê-lo apagaria que a ideia já foi tentada — o resto do
+> documento, que não fala de Contexto, continua valendo.
+
+
 > Traduz as Entidades de `../dominio/05-bounded-contexts.md` (BC-01, BC-02) em tabelas PostgreSQL (ADR-002/ADR-003), incorporando as regras já fixadas em `../dominio/03-business-decisions.md` (BDs). Três tabelas explicitamente listadas pelo documento funcional fornecido pelo usuário (seção 28: `payments`, `payment_status_history`, `payment_provider_events`), mais `audit_logs` (BD-18 — necessária, mas não citada por nome naquela lista, mesmo padrão de `billing-service`/`person-service`/`storage-service`, que também acrescentaram `audit_logs` além do que a lista inicial do usuário continha).
 >
 > Tipos usam sintaxe PostgreSQL. `UUID` é gerado pela aplicação. Valores financeiros em `NUMERIC` (ADR-014). Onde o domínio já modelado não fixa um detalhe de schema, este documento resolve de forma simples, marcado com **\*** e listado em "Pontos Abertos".

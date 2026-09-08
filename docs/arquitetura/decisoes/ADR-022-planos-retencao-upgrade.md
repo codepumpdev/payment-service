@@ -1,7 +1,51 @@
 # ADR-022 — Planos, Retenção e Upgrade (Aplicação Alvo)
 
-- **Status:** Aceita
+- **Status:** Aceita — **revisada em 2026-09-06** (§26 reescrita; ver Revisão)
 - **Data:** 2026-08-15
+
+> **⚠ Emenda em curso (2026-09-06).** Esta ADR é adoção local da **seção 26**, e aquela
+> seção está sob emenda proposta (`auth-service` ADR-034; `billing-service`
+> ADR-025/ADR-026). **É a ADR mais afetada das aplicações alvo**, e por duas razões
+> diferentes.
+>
+> **1. A decisão 2 — o recurso externo `PAYMENT` — perde o mecanismo em que se apoia.**
+>
+> O catálogo novo é **quantitativo** (ADR-034, decisão 14): ele tem `quantity` por
+> serviço e um `extras` opaco, e **não** tem a lista de recursos externos da §26.10.
+> A leitura natural é que *"`PAYMENT` não permitido"* vira `quantity: 0` — que é
+> exatamente "não pode criar", e é distinto de `null`, que é ilimitado. **A tradução
+> parece óbvia e não está decidida**, e ela muda o código de erro que o cliente vê
+> (`RECURSO_NAO_PERMITIDO_NO_PLANO` contra `LIMITE_PLANO_ATINGIDO`).
+>
+> **2. Este serviço é a EXCEÇÃO do modo somente leitura.**
+>
+> ```
+> cliente inadimplente tenta pagar  →  bloqueado por estar inadimplente
+>                                   →  não consegue sair da inadimplência
+> ```
+>
+> A ADR-025, **decisão 7**, resolve isso e é a única regra da plataforma escrita
+> especificamente por causa deste serviço: **o fluxo de pagamento nunca é suspenso.**
+> Criar Payment é ação iniciada pelo cliente e mesmo assim **não** para quando
+> `Token.AccessUntil` está no passado — porque o bloqueio se tornaria a causa da própria
+> permanência da inadimplência.
+>
+> Isso interage com o ponto 1 e precisa ser lido junto: se a tradução do recurso virar
+> `quantity: 0`, a verificação de quantidade **não pode** alcançar o pagamento da
+> própria fatura em atraso.
+>
+> **O resto segue as demais:** plano da **raiz** do token em vez de `profile.plan`;
+> limites do catálogo pelo `planresolver` (`codepump-lib` ADR-013);
+> `payments.owner_user_id` intacto; `/internal/purge` com o motivo de inadimplência,
+> retenção de **12 meses** (ADR-025, decisão 10).
+>
+> **A §26 do padrão FOI REESCRITA em 2026-09-06, e esta ADR ainda não.** O aviso
+> acima foi escrito quando a emenda era proposta; ela foi incorporada ao padrão, e o
+> mapa do que mudou está na **§26.14**. Enquanto esta adoção local não for revista,
+> **o padrão é que vale** — o texto abaixo descreve o modelo anterior, e serve para
+> entender de onde se veio, não para orientar implementação nova.
+>
+> **O que muda, decisão a decisão, está na seção "Revisão (2026-09-06)" mais abaixo.**
 
 ## Contexto
 
@@ -90,6 +134,72 @@ O expurgo de retenção `FREE` é feito **dentro** do `/internal/purge` já exis
 ### 9. Fronteira (seção 26.11)
 
 O `payment-service` **aplica** recurso externo/limite/retenção/expurgo; o `auth-service` só **fornece** o contexto confiável (usuário/plano no `USER JWT`) — **nunca** aplica essas regras.
+
+## Revisão (2026-09-06) — a §26 reescrita
+
+**O que vale para todas as aplicações alvo, e não se repete abaixo:** o plano vem da
+**raiz** do token e é opaco (§26.1); a fatia vem do `planresolver` da `codepump-lib`
+(§26.3), sem consulta por requisição; a retenção continua sendo configuração local
+(§26.6); e o `/internal/purge` ganha o motivo de inadimplência, com a lista puxada de
+`GET /internal/defaulters` e **reconciliada** a cada execução (§26.8).
+
+| Decisão | O que acontece |
+|---|---|
+| 1. Planos | **Morre.** Os três nomes saem |
+| 2. Recurso externo `PAYMENT` | **Muda de forma, não de efeito** — ver abaixo |
+| 3 / 3.1. Titular — `payments.owner_user_id` | **Fica**, e ganha `owner_organization_id` |
+| 4. Limite de registros | **Fica a mecânica**, muda a origem do número |
+| 5. Retenção — `payments.purge_at` | **Fica inteira** |
+| 6. Upgrade — `POST /internal/users/{userId}/plan` | **Morre** |
+| 7. Expurgo | **Fica**, e ganha o motivo de inadimplência — **12 meses** |
+| 8. `GET /plans` e `/config/plans` | **Morrem** |
+| 9. Fronteira | **Fica inteira** |
+
+### A decisão 2 vira número, e os dois erros continuam distintos
+
+O catálogo é quantitativo e não tem lista de recursos (§26.2). O recurso `PAYMENT` vira
+a própria fatia deste serviço:
+
+```
+quantity: 0      →  o plano não dá direito a pagar        →  403 RECURSO_NAO_PERMITIDO_NO_PLANO
+quantity: N      →  N pagamentos; o N+1 é recusado        →  403 LIMITE_PLANO_ATINGIDO
+quantity: null   →  sem limite
+```
+
+**Zero não é limite atingido, e por isso o código de erro não é o mesmo.** "Você não
+contratou isto" e "você já usou tudo o que contratou" levam o cliente a ações
+diferentes — uma é upgrade, a outra é esperar o próximo ciclo. Era essa distinção que a
+decisão 2 protegia com um recurso booleano, e ela sobrevive à mudança de forma.
+
+A verificação continua **prioritária sobre o limite** e continua acontecendo **antes de
+qualquer efeito** — nada é criado, nada é chamado.
+
+### O impasse do inadimplente, e por que ele não acontece
+
+```
+cliente inadimplente tenta pagar  →  bloqueado por estar inadimplente
+                                  →  não consegue sair da inadimplência
+```
+
+A §26.7 nomeia este serviço como exceção: **o fluxo de pagamento nunca é suspenso.**
+Criar Payment é ação do cliente e mesmo assim não para quando `accessUntil` está no
+passado.
+
+**E o limite quantitativo não recria o impasse por outro caminho**, por uma razão que já
+estava no desenho: a fatura da assinatura é cobrada **sistema a sistema** — sem `X-User` —,
+e a §26.5 põe a operação M2M pura fora de limite e de retenção. O pagamento que tira o
+cliente da inadimplência nunca passa pela contagem.
+
+Para um pagamento iniciado pelo cliente enquanto ele está vencido, vale a exceção acima:
+o acesso vencido não o bloqueia. **As duas regras juntas fecham o impasse pelos dois
+lados**, e é preciso que estejam escritas juntas — cada uma sozinha deixaria uma fresta.
+
+### O que não muda
+
+O ADR-006 continua: Payment é imutável e nunca alterado. O expurgo remove o registro
+inteiro quando a retenção vence, e não o edita.
+
+---
 
 ## Consequências
 

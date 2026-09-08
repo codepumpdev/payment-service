@@ -1,5 +1,20 @@
 # Arquitetura — Componentes
 
+> **Desatualizado em 2026-09-07 — o conceito de Contexto foi removido da plataforma.**
+>
+> O que neste documento descreve Contexto **não vale mais**: a classificação deste serviço no padrão de Contexto — contextual, global ou misto — e tudo que dependa dela. Cada serviço tem um banco, e o endereço dele está na configuração do serviço.
+>
+> A separação de dados passou a ser **por serviço**: cada serviço tem um banco,
+> com endereço na configuração dele, conhecido na partida. O padrão está em
+> `codepump/docs/padrao-desenvolvimento.md` §28; o registro do que o Contexto
+> era, do que custou e do que se perdeu ao retirá-lo está em
+> `codepump/docs/contexto-o-que-foi-e-por-que-saiu.md`.
+>
+> **O texto abaixo fica como estava.** Ele descreve decisões reais, tomadas por
+> razões reais, e reescrevê-lo apagaria que a ideia já foi tentada — o resto do
+> documento, que não fala de Contexto, continua valendo.
+
+
 > Ponto de partida: os Bounded Contexts de `../dominio/05-bounded-contexts.md` (BC-01, BC-02). Assim como `billing-service`/`person-service`/`storage-service`, este serviço é inteiramente síncrono — todos os BCs vivem, no MVP, dentro de **um único deployável** (Payment API).
 
 ---

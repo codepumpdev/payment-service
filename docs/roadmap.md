@@ -1,5 +1,20 @@
 # Roadmap do Projeto — payment-service
 
+> **Desatualizado em 2026-09-07 — o conceito de Contexto foi removido da plataforma.**
+>
+> O que neste documento descreve Contexto **não vale mais**: as etapas que planejavam adotar, migrar ou operar Contextos.
+>
+> A separação de dados passou a ser **por serviço**: cada serviço tem um banco,
+> com endereço na configuração dele, conhecido na partida. O padrão está em
+> `codepump/docs/padrao-desenvolvimento.md` §28; o registro do que o Contexto
+> era, do que custou e do que se perdeu ao retirá-lo está em
+> `codepump/docs/contexto-o-que-foi-e-por-que-saiu.md`.
+>
+> **O texto abaixo fica como estava.** Ele descreve decisões reais, tomadas por
+> razões reais, e reescrevê-lo apagaria que a ideia já foi tentada — o resto do
+> documento, que não fala de Contexto, continua valendo.
+
+
 > Etapas referem-se às seções de `padrao-desenvolvimento.html` (codepump).
 > Status possíveis: `Pendente` · `Em andamento` · `Bloqueado` · `Feito`
 > No companheiro visual (`roadmap.html`), cada item aparece como: 🟢 Feito · 🟡 Incompleto · 🔵 Sem dependências pendentes, pronto para começar · ⚪ Bloqueado por dependência

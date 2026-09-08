@@ -1,5 +1,20 @@
 # Contratos de API — Payment Service
 
+> **Desatualizado em 2026-09-07 — o conceito de Contexto foi removido da plataforma.**
+>
+> O que neste documento descreve Contexto **não vale mais**: a rota `POST /internal/resetContext`, que não existe mais, e o que o texto diga sobre o Contexto chegar pela identidade autenticada.
+>
+> A separação de dados passou a ser **por serviço**: cada serviço tem um banco,
+> com endereço na configuração dele, conhecido na partida. O padrão está em
+> `codepump/docs/padrao-desenvolvimento.md` §28; o registro do que o Contexto
+> era, do que custou e do que se perdeu ao retirá-lo está em
+> `codepump/docs/contexto-o-que-foi-e-por-que-saiu.md`.
+>
+> **O texto abaixo fica como estava.** Ele descreve decisões reais, tomadas por
+> razões reais, e reescrevê-lo apagaria que a ideia já foi tentada — o resto do
+> documento, que não fala de Contexto, continua valendo.
+
+
 > Cobre os fluxos já modelados em `../dominio/02-event-stories.md` (ES-01 a ES-09) e os requisitos funcionais correspondentes (`../requisitos/10-functional-requirements.md`, RF-01 a RF-09). Rotas versionadas com prefixo `/v1` (ADR-005). `GET /health` e `GET /ready` (seção 8) seguem, ambos, a exceção de versionamento — convenção organizacional de health-check/readiness-check (`padrao-desenvolvimento.md`, seção 12; ADR-019). Onde o domínio já modelado não fixa um detalhe, este documento resolve de forma simples, marcado com **\*** e listado em "Pontos Abertos".
 
 ---
